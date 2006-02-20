@@ -18,15 +18,13 @@ typedef struct {
 	int flags;	/* see below */
 	void (*func)(char *);	/* called if != 0 (after setting of var) */
 	void *var;	/* type is *long, *char or **char, see below */
-	long value;
+	int value;
 } topt;
 
-/* ThOr: make this clear; distict long from int (since this is != on my Alpha) and really use a flag for every case (spare the 0 case 
-for .... no flag) */
 #define GLO_ARG  1
 #define GLO_CHAR 2
-#define GLO_INT  4
-#define GLO_LONG 8
+#define GLO_NUM  0
+#define GLO_LONG GLO_NUM
 
 /* flags:
  *	bit 0 = 0 - no argument
@@ -41,10 +39,10 @@ for .... no flag) */
  *		else
  *			loptarg = &arg
  *			return ((value != 0) ? value : sname)
+ *
+ *	bit 1 = 0 - var is a pointer to an int
  *	bit 1 = 1 - var is a pointer to a char (or string),
  *			and value is interpreted as char
- *	bit 2 = 1 - var is a pointer to int
- *	bit 3 = 1 - var is a pointer to long
  *
  * Note: The options definition is terminated by a topt
  *	 containing only zeroes.

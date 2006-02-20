@@ -13,7 +13,6 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
-#include <limits.h>
 #include <netdb.h>
 #include <sys/param.h>
 #include <sys/types.h>
@@ -197,7 +196,7 @@ char *httpauth1 = NULL;
 int http_open (char *url)
 {
 	char *purl, *host, *request, *sptr;
-	size_t linelength, linelengthbase, tmp;
+	unsigned int linelength, linelengthbase;
 	unsigned long myip;
 	unsigned int myport;
 	int sock;
@@ -227,11 +226,6 @@ int http_open (char *url)
 	
 	/* The length of purl is upper bound by 3*strlen(url) + 1 if
 	 * everything in it is a space */
-	if (strlen(url) >= ULONG_MAX/3) {
-		fprintf (stderr, "URL too long. Skipping...\n");
-		sock = -1;
-		goto exit;
-	}
 	purl = (char *)malloc(strlen(url)*3 + 1);
 	if (!purl) {
 		fprintf (stderr, "malloc() failed, out of memory.\n");
@@ -277,27 +271,11 @@ int http_open (char *url)
 	linelengthbase = 62 + strlen(prgName) + strlen(prgVersion)
 	                 + strlen(ACCEPT_HEAD);
 
-	if(httpauth) {
-		tmp = (strlen(httpauth) + 1) * 4;
-		if (strlen(httpauth) >= ULONG_MAX/4 - 1 ||
-		    linelengthbase + tmp < linelengthbase) {
-			fprintf(stderr, "HTTP authentication too long. Skipping...\n");
-			sock = -1;
-			goto exit;
-		}
-		linelengthbase += tmp;
-	}
+	if(httpauth)
+		linelengthbase += (strlen(httpauth) + 1) * 4;
 
-	if(httpauth1) {
-		tmp = (strlen(httpauth1) + 1) * 4;
-		if (strlen(httpauth1) >= ULONG_MAX/4 - 1 ||
-		    linelengthbase + tmp < linelengthbase) {
-			fprintf(stderr, "HTTP authentication too long. Skipping...\n");
-			sock = -1;
-			goto exit;
-		}
-		linelengthbase += tmp;
-	}
+	if(httpauth1)
+		linelengthbase += (strlen(httpauth1) + 1) * 4;
 
 	do {
 		if (proxyip != INADDR_NONE) {
@@ -305,27 +283,10 @@ int http_open (char *url)
 			myip = proxyip;
 
 			linelength = linelengthbase + strlen(purl);
-			if (linelength < linelengthbase) {
-				fprintf(stderr, "URL too long. Skipping...\n");
-				sock = -1;
-				goto exit;
-			}
-
-			if(host) {
-				tmp = 9 + strlen(host) + 5;
-				if (strlen(host) >= ULONG_MAX - 14 ||
-				    linelength + tmp < linelength) {
-					fprintf(stderr, "Hostname info too long. Skipping...\n");
-					sock = -1;
-					goto exit;
-				}
+			if(host)
 				/* "Host: <host>:<port>\r\n" */
-				linelength += tmp;
-			}
+				linelength += 9 + strlen(host) + 5;
 
-			/* Buffer is reused for receiving later on, so ensure
-			 * minimum size. */
-			linelength = (linelength < 4096) ? 4096 : linelength;
 			request = (char *)malloc((linelength + 1));
 
 			if (!request) {
@@ -351,27 +312,10 @@ int http_open (char *url)
 			}
 
 			linelength = linelengthbase + strlen(sptr);
-			if (linelength < linelengthbase) {
-				fprintf(stderr, "URL too long. Skipping...\n");
-				sock = -1;
-				goto exit;
-			}
-
-			if(host) {
-				tmp = 9 + strlen(host) + 5;
-				if (strlen(host) >= ULONG_MAX - 14 ||
-				    linelength + tmp < linelength) {
-					fprintf(stderr, "Hostname info too long. Skipping...\n");
-					sock = -1;
-					goto exit;
-				}
+			if (host)
 				/* "Host: <host>:<port>\r\n" */
-				linelength += tmp;
-			}
+				linelength += 9 + strlen(host) + 5;
 
-			/* Buffer is reused for receiving later on, so ensure
-			 * minimum size. */
-			linelength = (linelength < 4096) ? 4096 : linelength;
 			request = (char *)malloc((linelength + 1));
 
 			if (!request) {

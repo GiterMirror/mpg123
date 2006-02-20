@@ -182,7 +182,7 @@ static int stream_skip_bytes(struct reader *rds,int len)
       buffer_resync();
     return ret;
   } else if (len >= 0) {
-    unsigned char buf[1024]; /* ThOr: Compaq cxx complained and it makes sense to me... or should one do a cast? What for? */
+    char buf[1024];
     int ret;
     while (len > 0) {
       int num = len < sizeof(buf) ? len : sizeof(buf);

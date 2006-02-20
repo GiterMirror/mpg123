@@ -153,7 +153,7 @@ int synth_ntom(real *bandPtr,int channel,unsigned char *out,int *pnt)
   int bo1;
   int ntom;
 
-  if(have_eq_settings)
+  if(equalfile)
 	do_equalizer(bandPtr,channel);
 
   if(!channel) {

@@ -210,8 +210,6 @@ struct reader {
 
 extern struct reader *rd,readers[];
 extern char *equalfile;
-/*ThOr: No fiddling with the pointer in control_generic! */
-extern int have_eq_settings;
 
 extern int halfspeed;
 extern int buffer_fd[2];
