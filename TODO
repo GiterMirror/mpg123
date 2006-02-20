@@ -1,0 +1,20 @@
+Layer-1 support not heavily tested .. 
+I-stereo in Level-3 seems to work now, but I have to optimize it.
+general optimizations in Level-3 code.
+add a few more audio-systems/machines. (done by Oliver Fromme)
+add CRC check.
+no 'free format stream' support.
+in layer2.c:
+	step_two: fraction as pointer .. 
+	process first channel 0 than channel 1
+	copy channel 0 to channel 1 for: i >= jsbound
+
+- MAYBE it's possible to save half of the muls in SubBandSynth .. because
+  they are duplicated. In this case we need a big tmp table
+  (about 256 * 512 'real' values) (I check this .. doesn't seem to be possible!)
+
+- better frame reader .. especially for layer 3 
+
+- check again layer1 !!
+
+- Write a special (optimized) 'single channel' decode.
