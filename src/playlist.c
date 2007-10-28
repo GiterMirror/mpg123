@@ -8,11 +8,10 @@
 	If we officially support Windows again, we should have this reworked to really cope with Windows paths, too.
 */
 
-#include "mpg123app.h"
+#include "mpg123.h"
 #include "getlopt.h" /* for loptind */
 #include "term.h" /* for term_restore */
 #include "playlist.h"
-#include "httpget.h"
 
 #include <time.h>
 
@@ -57,8 +56,8 @@ void prepare_playlist(int argc, char** argv)
 	}
 	if(param.shuffle == 1) shuffle_playlist();
 	/* Don't need these anymore, we have copies! */
-	mpg123_free_string(&pl.linebuf);
-	mpg123_free_string(&pl.dir);
+	free_stringbuf(&pl.linebuf);
+	free_stringbuf(&pl.dir);
 }
 
 char *get_next_file()
@@ -86,7 +85,7 @@ char *get_next_file()
 	/* randomly select files, with repeating */
 	else newfile = pl.list[ (size_t) rand() % pl.fill ].url;
 
-	return newfile; /* "-" is STDOUT, "" is dumb, NULL is nothing */
+	return newfile;
 }
 
 /* It doesn't really matter on program exit, but anyway...
@@ -107,8 +106,8 @@ void free_playlist()
 		pl.size = 0;
 		debug("free()d the playlist");
 	}
-	mpg123_free_string(&pl.linebuf);
-	mpg123_free_string(&pl.dir);
+	free_stringbuf(&pl.linebuf);
+	free_stringbuf(&pl.dir);
 }
 
 /* the constructor... */
@@ -122,8 +121,8 @@ void init_playlist()
 	pl.pos = 0;
 	pl.list = NULL;
 	pl.alloc_step = 10;
-	mpg123_init_string(&pl.dir);
-	mpg123_init_string(&pl.linebuf);
+	init_stringbuf(&pl.dir);
+	init_stringbuf(&pl.linebuf);
 	pl.type = UNKNOWN;
 	pl.loop = param.loop;
 }
@@ -148,7 +147,7 @@ int add_next_file (int argc, char *argv[])
 		if ((slashpos=strrchr(param.listname, '/')))
 		{
 			/* up to and including /, with space for \0 */
-			if(mpg123_resize_string(&pl.dir, 2 + slashpos - param.listname))
+			if(resize_stringbuf(&pl.dir, 2 + slashpos - param.listname))
 			{
 				memcpy(pl.dir.p, param.listname, pl.dir.size-1);
 				pl.dir.p[pl.dir.size-1] = 0;
@@ -176,22 +175,18 @@ int add_next_file (int argc, char *argv[])
 			else if (!strncmp(param.listname, "http://", 7))
 			{
 				int fd;
-				struct httpdata htd;
-				httpdata_init(&htd);
-				fd = http_open(param.listname, &htd);
-				debug1("htd.content_type.p: %p", (void*) htd.content_type.p);
-				if(htd.content_type.p != NULL)
+				char *listmime = NULL;
+				fd = http_open(param.listname, &listmime);
+				debug1("listmime: %p", (void*) listmime);
+				if(listmime != NULL)
 				{
-					int mimi;
-					debug1("htd.content_type.p value: %s", htd.content_type.p);
-					mimi = debunk_mime(htd.content_type.p);
-
-					if(mimi & IS_M3U) pl.type = M3U;
-					else if(mimi & IS_PLS)	pl.type = PLS;
+					debug1("listmime value: %s", listmime);
+					if(!strcmp("audio/x-mpegurl", listmime))	pl.type = M3U;
+					else if(!strcmp("audio/x-scpls", listmime) || !strcmp("application/pls", listmime))	pl.type = PLS;
 					else
 					{
 						if(fd >= 0) close(fd);
-						if(mimi & IS_FILE)
+						if(!strcmp("audio/mpeg", listmime) || !strcmp("audio/x-mpeg", listmime))
 						{
 							pl.type = NO_LIST;
 							if(param.listentry < 0)
@@ -206,10 +201,10 @@ int add_next_file (int argc, char *argv[])
 								return 1;
 							}
 						}
-						fprintf(stderr, "Error: unknown playlist MIME type %s; maybe "PACKAGE_NAME" can support it in future if you report this to the maintainer.\n", htd.content_type.p);
+						fprintf(stderr, "Error: unknown playlist MIME type %s; maybe "PACKAGE_NAME" can support it in future if you report this to the maintainer.\n", listmime);
 						fd = -1;
 					}
-					httpdata_reset(&htd);
+					free(listmime);
 				}
 				if(fd < 0)
 				{
@@ -251,7 +246,7 @@ int add_next_file (int argc, char *argv[])
 				/* have is the length of the string read, without the closing \0 */
 				if(pl.linebuf.size <= have+1)
 				{
-					if(!mpg123_resize_string(&pl.linebuf, pl.linebuf.size+LINEBUF_STEP))
+					if(!resize_stringbuf(&pl.linebuf, pl.linebuf.size+LINEBUF_STEP))
 					{
 						error("cannot increase line buffer");
 						break;
@@ -383,7 +378,7 @@ int add_next_file (int argc, char *argv[])
 					need = pl.dir.size + strlen(pl.linebuf.p+line_offset);
 					if(pl.linebuf.size < need)
 					{
-						if(!mpg123_resize_string(&pl.linebuf, need))
+						if(!resize_stringbuf(&pl.linebuf, need))
 						{
 							error("unable to enlarge linebuf for appending path! skipping");
 							continue;

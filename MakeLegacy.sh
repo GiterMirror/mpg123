@@ -17,23 +17,16 @@ PACKAGE_VERSION=`sed -n 's/^AC_INIT([^,]*, \[\([^,]*\)\], .*$/\1/p' < configure.
 PACKAGE_BUGREPORT=`sed -n 's/^AC_INIT([^,]*, [^,]*, \[\(.*\)\])$/\1/p' < configure.ac`
 
 cd src
-if test "x$MAKE" = "x"; then
-	MAKE=make
-fi
+
 # Write out our own very basic config.h
 echo "Creating basic config.h to reproduce pre-autoconf days."
-cp config.h.legacy config.h.new &&
+cp config.h.legacy config.h &&
 {
 	echo "/* added by MakeLegacy.sh */"
 	echo "#define PACKAGE_NAME \"$PACKAGE_NAME\"" 
 	echo "#define PACKAGE_VERSION \"$PACKAGE_VERSION\""
 	echo "#define PACKAGE_BUGREPORT \"$PACKAGE_BUGREPORT\""
-} >> config.h.new &&
-if test "`diff config.h config.h.new`" = ""; then
-	echo "no change in config.h"
-else
-	echo "config.h changed... moving"
-	mv config.h.new config.h
-fi &&
-exec $MAKE -f Makefile.legacy $* ||
+} >> config.h &&
+
+exec make -f Makefile.legacy $* ||
 echo "some error!?"
