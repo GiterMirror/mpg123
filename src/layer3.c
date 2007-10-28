@@ -421,7 +421,7 @@ void init_layer3(int down_sample_sblimit)
  * read additional side information (for MPEG 1 and MPEG 2)
  */
 static int III_get_side_info(struct III_sideinfo *si,int stereo,
- int ms_stereo,long sfreq,int single,int lsf)
+ int ms_stereo,long sfreq,int single,int lsf,int mpeg25)
 {
    int ch, gr;
    int powdiff = (single == 3) ? 4 : 0;
@@ -476,18 +476,30 @@ static int III_get_side_info(struct III_sideinfo *si,int stereo,
            /* exit(1); */
            return 1;
          }
-      
+
+
          /* region_count/start parameters are implicit in this case. */       
-         if(!lsf || gr_info->block_type == 2)
+
+         if( !lsf || (gr_info->block_type == 2) && !mpeg25) {
            gr_info->region1start = 36>>1;
-         else {
-/* check this again for 2.5 and sfreq=8 */
-           if(sfreq == 8)
-             gr_info->region1start = 108>>1;
-           else
-             gr_info->region1start = 54>>1;
+           gr_info->region2start = 576>>1;
          }
-         gr_info->region2start = 576>>1;
+         else {
+           if(mpeg25) { 
+             int r0c,r1c;
+             if((gr_info->block_type == 2) && (!gr_info->mixed_block_flag) ) 
+               r0c = 5;
+             else 
+               r0c = 7;
+             r1c = 20 - r0c;
+             gr_info->region1start = bandInfo[sfreq].longIdx[r0c+1] >> 1 ;
+             gr_info->region2start = bandInfo[sfreq].longIdx[r0c+1+r1c+1] >> 1; 
+           }
+           else {
+             gr_info->region1start = 54>>1;
+             gr_info->region2start = 576>>1; 
+           } 
+         }
        }
        else {
          int i,r0c,r1c;
@@ -1811,7 +1823,7 @@ int do_layer3(struct frame *fr,int outmode,struct audio_info_struct *ai)
   }
   /* quick hack to keep the music playing */
   /* after having seen this nasty test file... */
-  if(III_get_side_info(&sideinfo,stereo,ms_stereo,sfreq,single,fr->lsf))
+  if(III_get_side_info(&sideinfo,stereo,ms_stereo,sfreq,single,fr->lsf,fr->mpeg25))
   {
     error("bad frame - unable to get valid sideinfo");
     return clip;
