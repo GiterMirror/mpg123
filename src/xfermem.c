@@ -12,7 +12,7 @@
 
 #ifndef NOXFERMEM
 
-#include "mpg123app.h"
+#include "mpg123.h"
 #include <string.h>
 #include <errno.h>
 #include <sys/time.h>
@@ -25,6 +25,7 @@
 #include <sys/select.h>
 #endif
 
+
 #ifndef HAVE_MMAP
 #include <sys/ipc.h>
 #include <sys/shm.h>
@@ -34,9 +35,9 @@
 #define MAP_ANON MAP_ANONYMOUS
 #endif
 
-void xfermem_init (txfermem **xf, size_t bufsize, size_t msize, size_t skipbuf)
+void xfermem_init (txfermem **xf, int bufsize, int msize, int skipbuf)
 {
-	size_t regsize = bufsize + msize + skipbuf + sizeof(txfermem);
+	int regsize = bufsize + msize + skipbuf + sizeof(txfermem);
 
 #ifdef HAVE_MMAP
 #  ifdef MAP_ANON
@@ -115,9 +116,9 @@ void xfermem_init_reader (txfermem *xf)
 		close (xf->fd[XF_WRITER]);
 }
 
-size_t xfermem_get_freespace (txfermem *xf)
+int xfermem_get_freespace (txfermem *xf)
 {
-	size_t freeindex, readindex;
+	int freeindex, readindex;
 
 	if(!xf)
 		return 0;
@@ -131,9 +132,9 @@ size_t xfermem_get_freespace (txfermem *xf)
 		return ((xf->size - (freeindex - readindex)) - 1);
 }
 
-size_t xfermem_get_usedspace (txfermem *xf)
+int xfermem_get_usedspace (txfermem *xf)
 {
-	size_t freeindex, readindex;
+	int freeindex, readindex;
 
 	if(!xf)
 		return 0;
@@ -220,10 +221,10 @@ int xfermem_block (int readwrite, txfermem *xf)
 
 #else /* stubs for generic / win32 */
 
-#include "mpg123app.h"
+#include "mpg123.h"
 #include "xfermem.h"
 
-void xfermem_init (txfermem **xf, size_t bufsize, size_t msize, size_t skipbuf)
+void xfermem_init (txfermem **xf, int bufsize, int msize, int skipbuf)
 {
 }
 void xfermem_done (txfermem *xf)
@@ -235,11 +236,11 @@ void xfermem_init_writer (txfermem *xf)
 void xfermem_init_reader (txfermem *xf)
 {
 }
-size_t xfermem_get_freespace (txfermem *xf)
+int xfermem_get_freespace (txfermem *xf)
 {
   return 0;
 }
-size_t xfermem_get_usedspace (txfermem *xf)
+int xfermem_get_usedspace (txfermem *xf)
 {
   return 0;
 }

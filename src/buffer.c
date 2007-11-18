@@ -10,14 +10,13 @@
 	- dammed night coders;-)
 */
 
-#include "mpg123app.h"
+#include "mpg123.h"
 
 #ifndef NOXFERMEM
 
-#include "common.h"
 #include <errno.h>
 
-int outburst = 32768;
+int outburst = MAXOUTBURST;
 
 static int intflag = FALSE;
 static int usr1flag = FALSE;
@@ -93,7 +92,7 @@ void buffer_sig(int signal, int block)
 	return;
 }
 
-void buffer_loop(audio_output_t *ao, sigset_t *oldsigset)
+void buffer_loop(struct audio_info_struct *ai, sigset_t *oldsigset)
 {
 	int bytes;
 	int my_fd = buffermem->fd[XF_READER];
@@ -105,7 +104,7 @@ void buffer_loop(audio_output_t *ao, sigset_t *oldsigset)
 	catchsignal (SIGUSR1, catch_usr1);
 	sigprocmask (SIG_SETMASK, oldsigset, NULL);
 	if (param.outmode == DECODE_AUDIO) {
-		if (ao->open(ao) < 0) {
+		if (audio_open(ai) < 0) {
 			perror("audio");
 			exit(1);
 		}
@@ -120,7 +119,7 @@ void buffer_loop(audio_output_t *ao, sigset_t *oldsigset)
 		if (intflag) {
 			intflag = FALSE;
 			if (param.outmode == DECODE_AUDIO)
-				ao->flush(ao);
+				audio_queueflush (ai);
 			xf->readindex = xf->freeindex;
 			if (xf->wakeme[XF_WRITER])
 				xfermem_putcmd(my_fd, XF_CMD_WAKEUP);
@@ -141,12 +140,15 @@ void buffer_loop(audio_output_t *ao, sigset_t *oldsigset)
 			 */
 			if (xf->wakeme[XF_WRITER])
 				xfermem_putcmd(my_fd, XF_CMD_WAKEUP);
-			ao->rate = xf->buf[0]; 
-			ao->channels = xf->buf[1]; 
-			ao->format = xf->buf[2];
-			if (reset_output(ao) < 0) {
-				error1("failed to reset audio: %s", strerror(errno));
-				exit(1);
+			if (param.outmode == DECODE_AUDIO) {
+				audio_close (ai);
+				ai->rate = xf->buf[0]; 
+				ai->channels = xf->buf[1]; 
+				ai->format = xf->buf[2];
+				if (audio_open(ai) < 0) {
+					perror("audio");
+					exit(1);
+				}
 			}
 		}
 		if ( (bytes = xfermem_get_usedspace(xf)) < outburst ) {
@@ -216,7 +218,7 @@ void buffer_loop(audio_output_t *ao, sigset_t *oldsigset)
 		if (param.outmode == DECODE_FILE)
 			bytes = write(OutputDescriptor, xf->data + xf->readindex, bytes);
 		else if (param.outmode == DECODE_AUDIO)
-			bytes = ao->write(ao,
+			bytes = audio_play_samples(ai,
 				(unsigned char *) (xf->data + xf->readindex), bytes);
 
 		if(bytes < 0) {
@@ -244,7 +246,7 @@ void buffer_loop(audio_output_t *ao, sigset_t *oldsigset)
 	}
 
 	if (param.outmode == DECODE_AUDIO)
-		ao->close(ao);
+		audio_close (ai);
 }
 
 #endif

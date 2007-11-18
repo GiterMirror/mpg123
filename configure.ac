@@ -10,9 +10,7 @@ AC_PREREQ(2.57)
 
 dnl ############# Initialisation
 
-AC_INIT([mpg123], [1.0pre2], [mpg123-devel@lists.sourceforge.net])
-LIBMPG123_VERSION=0:0:0
-AC_SUBST( LIBMPG123_VERSION )
+AC_INIT([mpg123], [0.68], [mpg123-devel@lists.sourceforge.net])
 
 AC_CONFIG_SRCDIR(src/mpg123.c)
 AC_CONFIG_AUX_DIR(build)
@@ -26,109 +24,22 @@ AM_CONFIG_HEADER(src/config.h)
 
 dnl ############# Compiler and tools Checks
 
-LT_LDFLAGS=-export-dynamic
-be_static=no
-all_static=no
-AC_MSG_CHECKING([if you are up to something totally static with LDFLAGS/CFLAGS])
-for f in $LDFLAGS $CFLAGS
-do
-	case "$f" in
-		-all-static)
-			be_static=yes
-			all_static=yes
-		;;
-		-static)
-			be_static=yes
-		;;
-	esac
-done
-if test "x$be_static" = xyes; then
-	AC_MSG_RESULT([yes])
-	LT_LDFLAGS=-all-static
-else
-	AC_MSG_RESULT([no])
-fi
-if test "x$all_static" = xyes; then
-	AC_MSG_WARN( Use -static in LDFLAGS for all-static linking! Your compiler may blow up on that -all-static. )
-fi
-
 AM_PROG_AS
 AC_PROG_CC
 AC_PROG_INSTALL
+AC_PROG_RANLIB
 
 AC_C_CONST
 AC_INLINE
 
-
-dnl ############# Use Libtool for dynamic module loading
-
-LTDLDIR=
-OUTPUT_OBJ="module.\$(OBJEXT)"
-dnl Enable building of the libltdl library
-AC_ARG_ENABLE(modules,
-[  --enable-modules=[no/yes] dynamically loadable output modules],
-[
-	if test "x$enableval" = xyes
-	then
-		modules=enabled
-	else
-		modules=disabled
-	fi
-],
-[
-	if test "x$be_static" = "xyes"; then
-		modules=disabled
-	else
-		modules=enabled
-	fi
-])
-
-if test "$enable_shared" = no; then
-	modules=disabled
-	LT_LDFLAGS=
+# Check if system supports termios
+AC_SYS_POSIX_TERMIOS
+if test "x$ac_cv_sys_posix_termios" = "xyes"; then
+  AC_DEFINE_UNQUOTED([HAVE_TERMIOS], 1, 
+  [Define this if you have the POSIX termios library])
 fi
 
-if test $modules = disabled
-then
-	echo "Modules disabled, not preparing libltdl"
-else
-LTDLDIR=libltdl
-AC_LIBLTDL_INSTALLABLE
-AC_DEFINE(HAVE_LTDL, 1, [ Define if LTDL library is available. ])
 
-dnl Check for dlopen support
-AC_LIBTOOL_DLOPEN
-
-dnl We only want shared libraries by default
-AC_DISABLE_STATIC
-AC_ENABLE_SHARED
-# Enable module support in source code
-AC_DEFINE( USE_MODULES, 1, [Define if modules are enabled] )
-fi
-
-dnl Configure libtool
-AC_LIBTOOL_WIN32_DLL
-AM_PROG_LIBTOOL
-
-if test $modules = disabled
-then
-	echo "Modules still disabled..."
-	LIBLTDL=
-	LTDLINCL=
-	MODULE_OBJ="legacy_module.\$(OBJEXT)"
-else
-	MODULE_OBJ="module.\$(OBJEXT)"
-dnl Configure libltdl
-AC_CONFIG_SUBDIRS(libltdl)
-fi
-
-AM_CONDITIONAL( [HAVE_MODULES], [test "x$modules" = xenabled] )
-
-AC_SUBST(LTDLINCL)
-AC_SUBST(LIBLTDL)
-AC_SUBST(LTDLDIR)
-AC_SUBST(MODULE_OBJ)
-AC_SUBST(LT_LDFLAGS)
 
 dnl ############## Configurable Options
 
@@ -201,26 +112,23 @@ AC_ARG_WITH([cpu], [
 ]) 
 
 AC_ARG_WITH([audio], [
-  --with-audio=<list of modules>  Select a list (or only one) of audio output modules.
-])
-AC_ARG_WITH([default-audio], [
-  --with-default-audio=aix        Use AIX as default audio output sub-system
-  --with-default-audio=alib       Use Alib as default audio output sub-system (for HPUX)
-  --with-default-audio=alsa       Use ALSA as default audio output sub-system
-  --with-default-audio=dummy      Use dummy as default audio (when no sound card is available)
-  --with-default-audio=esd        Use ESoundD as default audio output sub-system
-  --with-default-audio=hp         Use HP as default audio output sub-system
-  --with-default-audio=jack       Use JACK as default low-latency audio server
-  --with-default-audio=macosx     Use Mac OS X as default audio output sub-system (CoreAudio)
-  --with-default-audio=mint       Use MinT as default audio output sub-system (Atari)
-  --with-default-audio=nas        Use NAS as default audio output (Network Audio System)
-  --with-default-audio=os2        Use OS2 as default audio output sub-system
-  --with-default-audio=oss        Use OSS as default audio output sub-system (/dev/dsp)
-  --with-default-audio=portaudio  Use PortAudio as default audio output sub-system
-  --with-default-audio=pulse      Use Pulse audio server as default audio output sub-system
-  --with-default-audio=sdl        Use SDL as default audio output sub-system (Simple DirectMedia Layer)
-  --with-default-audio=sgi        Use SGI as default audio output sub-system (IRIX)
-  --with-default-audio=sun        Use Sun as default audio output sub-system (/dev/audio)
+  --with-audio=aix        Use AIX audio output sub-system
+  --with-audio=alib       Use Alib audio output sub-system (for HPUX)
+  --with-audio=alsa       Use ALSA audio output sub-system
+  --with-audio=dummy      Use dummy audio (when no sound card is available)
+  --with-audio=esd        Use ESoundD audio output sub-system
+  --with-audio=hp         Use HP audio output sub-system
+  --with-audio=jack       Use JACK low-latency audio server
+  --with-audio=macosx     Use Mac OS X audio output sub-system (CoreAudio)
+  --with-audio=mint       Use MinT audio output sub-system (Atari)
+  --with-audio=nas        Use NAS audio output (Network Audio System)
+  --with-audio=os2        Use OS2 audio output sub-system
+  --with-audio=oss        Use OSS audio output sub-system (/dev/dsp)
+  --with-audio=portaudio  Use PortAudio audio output sub-system
+  --with-audio=sdl        Use SDL audio output sub-system (Simple DirectMedia Layer)
+  --with-audio=sgi        Use SGI audio output sub-system (IRIX)
+  --with-audio=sun        Use Sun audio output sub-system (/dev/audio)
+  --with-audio=win32      Use Windows audio output (WinMM)
 ])
 
 AC_ARG_WITH([optimization], [
@@ -234,27 +142,6 @@ AC_ARG_WITH([optimization], [
 AC_ARG_WITH([seektable], [
   --with-seektable=<size> choose size of seek index table (0 disables it), default 1000
 ])
-
-
-dnl ############## Modules
-
-# Dummy audio output module is alway supported
-output_modules="dummy"
-
-# Location that modules are installed to
-if test x$libdir = 'x${exec_prefix}/lib'; then
-    if test x$prefix = xNONE; then
-        pkglibdir="$ac_default_prefix/lib/$PACKAGE_NAME"
-    else
-        pkglibdir="$prefix/lib/$PACKAGE_NAME"
-    fi
-else
-    pkglibdir="$libdir/$PACKAGE_NAME"
-fi
-AC_DEFINE_UNQUOTED([PKGLIBDIR], "$pkglibdir", [Path to installed modules] ) 
-AC_SUBST([pkglibdir])
-
-
 
 dnl ############## Assembler, compiler properties
 
@@ -304,15 +191,6 @@ dnl ############## Function Checks
 
 AC_FUNC_MMAP
 
-# Check if system supports termios
-AC_SYS_POSIX_TERMIOS
-if test "x$ac_cv_sys_posix_termios" = "xyes"; then
-  AC_DEFINE_UNQUOTED([HAVE_TERMIOS], 1, 
-  [Define this if you have the POSIX termios library])
-fi
-
-AC_CHECK_FUNCS( random )
-
 # Check for sched_setscheduler
 AC_CHECK_FUNCS( sched_setscheduler setuid getuid)
 
@@ -335,18 +213,72 @@ if test $fifo = "yes" && test $have_mkfifo = "no"; then
 	AC_MSG_WARN( [ You forced FIFO code while I think there is no mkfifo() available! ] )
 fi
 
+dnl ############## Library Checks
 
+# Checks for libraries.
+AC_CHECK_LIB([m], [sqrt])
+AC_CHECK_LIB([mx], [powf])
 
-dnl ############## Header and Library Checks
+# Check for JACK
+PKG_CHECK_MODULES(JACK, jack, HAVE_JACK=yes, HAVE_JACK=no)
+
+# Check for EsounD
+PKG_CHECK_MODULES(ESOUND, esound, HAVE_ESOUND=yes, HAVE_ESOUND=no)
+
+# Check for SDL
+PKG_CHECK_MODULES(SDL, sdl, HAVE_SDL=yes, HAVE_SDL=no)
+
+# Check for NAS
+AC_CHECK_LIB( [audio], [AuOpenServer],
+	[ AC_CHECK_HEADER( [audio/audiolib.h],
+		[ HAVE_NAS="yes" ],
+		[ AC_MSG_WARN([Found NAS library but NOT header files on your system]) ] )
+	]
+)
+
+# Check for PortAudio
+case $target in
+	*-*-mingw32)
+		# We tested portaudio with MME
+		if test "x$HAVE_PORTAUDIO" != "xyes"; then
+			AC_CHECK_LIB( [portaudio], [Pa_Initialize],
+				[ AC_CHECK_HEADER( [portaudio.h],
+					[ HAVE_PORTAUDIO_WINMM="yes" && HAVE_PORTAUDIO="yes" ],
+					[ AC_MSG_WARN([Found PortAudio library but NOT header files on your system]) ] )
+				],
+				[ HAVE_PORTAUDIO="no" ],
+				[ -lwinmm ]
+			)
+		fi
+	;;
+	*)
+		AC_CHECK_LIB( [portaudio], [Pa_Initialize],
+			[ AC_CHECK_HEADER( [portaudio.h],
+				[ HAVE_PORTAUDIO="yes" ],
+				[ AC_MSG_WARN([Found PortAudio library but NOT header files on your system]) ] )
+			]
+		)
+	;;
+esac
+
+# Check for windows ... and win32 audio
+# Does not work... instead just check for header
+# AC_CHECK_LIB( [winmm], [waveOutOpen] )
+AC_CHECK_HEADERS([windows.h], HAVE_WINMM=yes, HAVE_WINMM=no)
+
+# Check for ALSA
+AC_CHECK_LIB( [asound], [snd_pcm_open],
+	[ AC_CHECK_HEADER( [alsa/asoundlib.h],
+		[ HAVE_ALSA="yes" ],
+		[ AC_MSG_WARN([Found ALSA library but NOT header files on your system]) ] )
+	]
+)
+
+dnl ############## Header Checks
 
 AC_HEADER_STDC
 dnl Is it too paranoid to specifically check for stdint.h and limits.h?
 AC_CHECK_HEADERS([stdlib.h string.h unistd.h sched.h sys/ioctl.h stdint.h limits.h inttypes.h sys/time.h sys/wait.h sys/resource.h signal.h])
-
-
-# Checks for maths libraries.
-AC_CHECK_LIB([m], [sqrt])
-AC_CHECK_LIB([mx], [powf])
 
 # attempt to make the signal stuff work... also with GENERIC - later
 #if test $ac_cv_header_sys_signal_h = yes; then
@@ -357,6 +289,28 @@ AC_CHECK_LIB([mx], [powf])
 #	   test $ac_cv_func_sigaction = yes; then
 #	AC_DEFINE( 
 #fi
+
+# OSS Header files: One of them is enough.
+AC_CHECK_HEADERS(sys/soundcard.h)
+AC_CHECK_HEADERS(linux/soundcard.h)
+AC_CHECK_HEADERS(machine/soundcard.h)
+if test "x${ac_cv_header_sys_soundcard_h}" = "xyes" ||
+   test "x${ac_cv_header_linux_soundcard_h}" = "xyes" ||
+   test "x${ac_cv_header_machine_soundcard_h}" = "xyes"; then
+	HAVE_OSS=yes
+else
+	HAVE_OSS=no
+fi
+
+# Sun Audio headers
+AC_CHECK_HEADERS([sun/audioio.h sys/audioio.h asm/audioio.h sys/audio.h], HAVE_SUNAUDIO=yes, HAVE_SUNAUDIO=no)
+
+# Mac OS X
+AC_CHECK_HEADERS([AudioUnit/AudioUnit.h CoreServices/CoreServices.h AudioToolbox/AudioToolbox.h],
+					HAVE_MACOSXAUDIO=yes, HAVE_MACOSXAUDIO=no)
+
+
+
 
 dnl ############## Choose compiler flags and CPU
 
@@ -476,429 +430,86 @@ if test "x$with_cpu" != "x"; then
 fi
 
 
-s_gen="decode dct64"
-s_altivec="decode_altivec dct64_altivec"
-s_i386="decode_i386 dct64_i386"
-s_i486="$s_i386 decode_i486 dct64_i486"
-s_i586="$s_i386 decode_i586"
-s_i586d="$s_i386 decode_i586_dither dnoise"
-s_3dnow="$s_i386 decode_3dnow dct64_3dnow dct36_3dnow equalizer_3dnow"
-s_3dnowext="decode_i386 dct64_3dnowext dct36_3dnowext dct64_mmx tabinit_mmx decode_3dnowext"
-s_mmx="decode_i386 dct64_mmx tabinit_mmx decode_mmx"  # doesn't need dct64_i386
-s_sse="decode_i386 dct64_mmx tabinit_mmx dct64_sse decode_sse"
-s_multi="getcpuflags"
-
-dnl CPU specific compiler flags and sources
+dnl CPU specific compiler flags
 case $cpu_type in
   generic)
     CFLAGS="$CFLAGS -DOPT_GENERIC -DREAL_IS_FLOAT"
-    more_sources="$s_gen"
   ;;
   generic_float)
     CFLAGS="$CFLAGS -DOPT_GENERIC -DFLOATOUT -DNOXFERMEM -DREAL_IS_FLOAT"
-    more_sources="$s_gen"
   ;;
   generic_fpu)
     CFLAGS="$CFLAGS -DOPT_GENERIC -DREAL_IS_FLOAT"
-    more_sources="$s_gen"
   ;;
   generic_nofpu)
     CFLAGS="$CFLAGS -DOPT_GENERIC -DREAL_IS_FIXED"
-    more_sources="$s_gen"
   ;;
   altivec)
     CFLAGS="$CFLAGS -maltivec -faltivec -DREAL_IS_FLOAT -DOPT_ALTIVEC"
-    more_sources="$s_altivec"
   ;;
   i386) 
     CFLAGS="$CFLAGS -DOPT_I386 -DREAL_IS_FLOAT"
-    more_sources="$s_i386"
   ;;
   i386_fpu) 
     CFLAGS="$CFLAGS -DOPT_I386 -DREAL_IS_FLOAT"
-    more_sources="$s_i386"
   ;;
   i386_nofpu) 
     CFLAGS="$CFLAGS -DOPT_I386 -DREAL_IS_FIXED"
-    more_sources="$s_i386"
   ;;
   i486) 
     CFLAGS="$CFLAGS -DOPT_I486 -DREAL_IS_FLOAT"
-    more_sources="$s_i486"
   ;;
   i586) 
     CFLAGS="$CFLAGS -DOPT_I586 -DREAL_IS_FLOAT"
-    more_sources="$s_i586"
   ;;
   i586_dither) 
     CFLAGS="$CFLAGS -DOPT_I586_DITHER -DREAL_IS_FLOAT"
-    more_sources="$s_i586d"
   ;;
   3dnow)
     # legacy 3dnow had the 3dnow optional... keeping that
     CFLAGS="$CFLAGS -DOPT_MULTI -DOPT_I586 -DOPT_3DNOW -DREAL_IS_FLOAT"
-    more_sources="$s_i586 $s_3dnow $s_multi "
   ;;
   3dnowext_alone) 
     CFLAGS="$CFLAGS -DOPT_3DNOWEXT -DREAL_IS_FLOAT"
-    more_sources="$s_3dnowext"
   ;;
   3dnowext) 
     AC_MSG_WARN([Combining 3DNowExt decoder with 3DNow for flexible rate, use 3dnowext_alone if you do not want this.])
     CFLAGS="$CFLAGS -DOPT_MULTI -DOPT_3DNOW -DOPT_3DNOWEXT -DREAL_IS_FLOAT"
-    more_sources="$s_3dnowext $s_3dnow $s_multi"
   ;;
   mmx_alone) 
     CFLAGS="$CFLAGS -DOPT_MMX -DREAL_IS_FLOAT"
-    more_sources="$s_mmx"
   ;;
   mmx)
     AC_MSG_WARN([Combining MMX decoder with i586 for flexible rate, use mmx_alone if you do not want this.])
     CFLAGS="$CFLAGS -DOPT_MULTI -DOPT_I586 -DOPT_MMX -DREAL_IS_FLOAT"
-    more_sources="$s_mmx $s_i586 $s_multi"
   ;;
   sse) 
     AC_MSG_WARN([Combining SSE decoder with i586 for flexible rate, use sse_alone if you do not want this.])
     CFLAGS="$CFLAGS -DOPT_MULTI -DOPT_I586 -DOPT_SSE -DREAL_IS_FLOAT"
-    more_sources="$s_sse $s_i586 $s_multi"
   ;;
   sse_alone) 
     CFLAGS="$CFLAGS -DOPT_SSE -DREAL_IS_FLOAT"
-    more_sources="$s_sse"
   ;;
   x86) 
     CFLAGS="$CFLAGS -DOPT_MULTI -DOPT_GENERIC -DOPT_I386 -DOPT_I586 -DOPT_MMX -DOPT_3DNOW -DOPT_3DNOWEXT -DOPT_SSE -DREAL_IS_FLOAT"
-    more_sources="$s_gen $s_i386 $s_i586 $s_mmx $s_3dnow $s_3dnowext $s_sse $s_multi"
- ;;
+  ;;
   x86_dither) 
     CFLAGS="$CFLAGS -DOPT_MULTI -DOPT_GENERIC -DOPT_I386 -DOPT_I586 -DOPT_I586_DITHER -DOPT_MMX -DOPT_3DNOW -DOPT_3DNOWEXT -DOPT_SSE -DREAL_IS_FLOAT"
-    more_sources="$s_gen $s_i386 $s_i586 $s_i586d $s_mmx $s_3dnow $s_3dnowext $s_sse $s_multi"
   ;;
   *)
   	AC_MSG_ERROR([Unknown CPU type '$cpu_type'])
   ;;
 esac
 
-for i in $more_sources
-do
-	DECODER_OBJ="$DECODER_OBJ $i.\$(OBJEXT)"
-	echo $DECODER_LOBJ | grep -q $i.lo || DECODER_LOBJ="$DECODER_LOBJ $i.lo"
-done
-
-AC_SUBST( DECODER_OBJ )
-AC_SUBST( DECODER_LOBJ )
-
-
-dnl ############## Output module choice
-
-# The full list of supported modules to check, first come, first serve.
-check_modules="alsa oss coreaudio sun win32 esound jack portaudio pulse sdl nas dummy"
-# The final list.
-output_modules=
-
-check_forced=no
-check_failed=no
-if test "x$with_audio" != "x"; then
-	check_modules="$with_audio dummy"
-	echo "Limiting outputs to build according to your preference: $check_modules"
-	check_forced=yes
-fi
-
 if test $cpu_type = "generic_float"; then
-	check_modules="dummy"
-	AC_MSG_WARN( [Forcing dummy output (decoding to wav/stdout only) with float samples, as the audio device system cannot handle floats.] )
+	CPU_TYPE_LIB="libcpu_generic.a"
+else
+	CPU_TYPE_LIB="libcpu_$cpu_type.a"
 fi
-
-# Now go through the modules to check and do the chores.
-for m in $check_modules
-do
-	case "$m" in
-		dummy)
-			AC_MSG_CHECKING([if you are too dumbing dumb for the dummy])
-			AC_MSG_RESULT([no])
-			output_modules="$output_modules dummy"
-			HAVE_DUMMY=yes
-		;;
-		oss)
-			AC_CHECK_HEADERS([sys/soundcard.h linux/soundcard.h machine/soundcard.h])
-			if test "x${ac_cv_header_sys_soundcard_h}" = "xyes" \
-				 -o "x${ac_cv_header_linux_soundcard_h}" = "xyes" \
-				 -o "x${ac_cv_header_machine_soundcard_h}" = "xyes";
-			then
-				output_modules="$output_modules oss"
-				HAVE_OSS="yes"
-			else
-				check_failed=yes
-			fi
-		;;
-		alsa)
-			ALSA_LIBS="-lasound"
-			# Check for ALSA
-			AC_CHECK_LIB( [asound], [snd_pcm_open],
-				[ AC_CHECK_HEADER( [alsa/asoundlib.h],
-					[ output_modules="$output_modules alsa" HAVE_ALSA="yes"],
-					[ AC_MSG_WARN([Found ALSA library but NOT header files on your system]) ] )
-				]
-			)
-			if test "x$HAVE_ALSA" != xyes; then
-				check_failed=yes
-			fi
-		;;
-		jack)
-			PKG_CHECK_MODULES(JACK, jack, output_modules="$output_modules jack" HAVE_JACK="yes", HAVE_JACK="no" check_failed=yes)
-		;;
-		pulse)
-			PKG_CHECK_MODULES(PULSE, libpulse-simple, output_modules="$output_modules pulse" HAVE_PULSE="yes", HAVE_PULSE="no" check_failed=yes)
-		;;
-		esound)
-			PKG_CHECK_MODULES(ESOUND, esound, output_modules="$output_modules esound" HAVE_ESOUND="yes", HAVE_ESOUND="no" check_failed=yes)
-		;;
-		portaudio)
-			# Remember: This looks only insane because you chose an insane tab width!
-			PORTAUDIO_LIBS="-lportaudio"
-			PORTAUDIO_CFLAGS=
-			case $target in
-				*-*-mingw32)
-					# We tested portaudio with MME
-					if test "x$HAVE_PORTAUDIO" != "xyes"; then
-						AC_CHECK_LIB( [portaudio], [Pa_Initialize],
-							[ AC_CHECK_HEADER( [portaudio.h],
-								[ output_modules="$output_modules portaudio" HAVE_PORTAUDIO_WINMM="yes" HAVE_PORTAUDIO="yes" ],
-								[ AC_MSG_WARN([Found PortAudio library but NOT header files on your system]) ] )
-								PORTAUDIO_LIBS="$PORTAUDIO_LIBS -lwinmm"
-							],
-							[ HAVE_PORTAUDIO="no"],
-							[ -lwinmm ]
-						)
-					fi
-				;;
-				*)
-					AC_CHECK_LIB( [portaudio], [Pa_Initialize],
-						[ AC_CHECK_HEADER( [portaudio.h],
-							[ output_modules="$output_modules portaudio" HAVE_PORTAUDIO="yes" ],
-							[ AC_MSG_WARN([Found PortAudio library but NOT header files on your system]) ] )
-						]
-					)
-				;;
-			esac
-			if test "x$HAVE_PORTAUDIO" != xyes; then
-				check_failed=yes
-			fi
-		;;
-		sdl)
-			PKG_CHECK_MODULES(SDL, sdl, output_modules="$output_modules sdl" HAVE_SDL="yes", HAVE_SDL="no" check_failed=yes)
-		;;
-		nas)
-			NAS_LIBS=-laudio
-			AC_CHECK_LIB( [audio], [AuOpenServer],
-				[ AC_CHECK_HEADER( [audio/audiolib.h],
-					[ output_modules="$output_modules nas" HAVE_NAS="yes"],
-					[ AC_MSG_WARN([Found NAS library but NOT header files on your system]) ] )
-				]
-			)
-			if test "x$HAVE_NAS" != xyes; then
-				check_failed=yes
-			fi
-		;;
-		win32)
-			# Check for windows ... and win32 audio
-			# Does not work... instead just check for header
-			# AC_CHECK_LIB( [winmm], [waveOutOpen] )
-			WIN32_LIBS=-lwinmm
-			AC_CHECK_HEADERS([windows.h], output_modules="$output_modules win32" HAVE_WIN32=yes, HAVE_WIN32=no check_failed=yes)
-		;;
-		sun)
-			AC_CHECK_HEADERS([sun/audioio.h sys/audioio.h asm/audioio.h sys/audio.h])
-			if test "x${ac_cv_header_sun_audioio_h}" = "xyes" \
-				 -o "x${ac_cv_header_sys_audioio_h}" = "xyes" \
-				 -o "x${ac_cv_header_asm_audioio_h}" = "xyes";
-			then
-				output_modules="$output_modules sun"
-				HAVE_SUN="yes"
-			else
-				check_failed=yes
-			fi
-		;;
-		coreaudio)
-			COREAUDIO_LIBS="-framework AudioToolbox -framework AudioUnit -framework CoreServices"
-			AC_CHECK_HEADERS([AudioUnit/AudioUnit.h CoreServices/CoreServices.h AudioToolbox/AudioToolbox.h])
-			if test "x${ac_cv_header_AudioUnit_AudioUnit_h}" = "xyes" \
-				 -a "x${ac_cv_header_CoreServices_CoreServices_h}" = "xyes" \
-				 -a "x${ac_cv_header_AudioToolbox_AudioToolbox_h}" = "xyes";
-			then
-				output_modules="$output_modules coreaudio"
-				HAVE_COREAUDIO="yes"
-			else
-				check_failed=yes
-			fi
-		;;
-		*)
-			AC_MSG_ERROR([Unsupported output '$m' demanded!])
-		;;
-	esac
-done
-
-if test "x$check_forced" = xyes -a "x$check_failed" = "xyes"; then
-	AC_MSG_ERROR([One/some of your requested audio modules failed the test!])
-fi
-
-# When you extend check_modules, you should extend this:
-#for i in alsa oss coreaudio sun win32 esound jack portaudio pulse sdl nas dummy; do echo $i; done |
-#perl -ne 'chomp; $big = uc($_); print <<EOT;
-#AC_SUBST(${big}_LIBS)
-#AC_SUBST(${big}_LDFLAGS)
-#AC_SUBST(${big}_CFLAGS)
-#AM_CONDITIONAL( [HAVE_$big], [test "x\$HAVE_$big" = xyes] )
-#EOT
-#'
-
-AC_SUBST(ALSA_LIBS)
-AC_SUBST(ALSA_LDFLAGS)
-AC_SUBST(ALSA_CFLAGS)
-AM_CONDITIONAL( [HAVE_ALSA], [test "x$HAVE_ALSA" = xyes] )
-AC_SUBST(OSS_LIBS)
-AC_SUBST(OSS_LDFLAGS)
-AC_SUBST(OSS_CFLAGS)
-AM_CONDITIONAL( [HAVE_OSS], [test "x$HAVE_OSS" = xyes] )
-AC_SUBST(COREAUDIO_LIBS)
-AC_SUBST(COREAUDIO_LDFLAGS)
-AC_SUBST(COREAUDIO_CFLAGS)
-AM_CONDITIONAL( [HAVE_COREAUDIO], [test "x$HAVE_COREAUDIO" = xyes] )
-AC_SUBST(SUN_LIBS)
-AC_SUBST(SUN_LDFLAGS)
-AC_SUBST(SUN_CFLAGS)
-AM_CONDITIONAL( [HAVE_SUN], [test "x$HAVE_SUN" = xyes] )
-AC_SUBST(WIN32_LIBS)
-AC_SUBST(WIN32_LDFLAGS)
-AC_SUBST(WIN32_CFLAGS)
-AM_CONDITIONAL( [HAVE_WIN32], [test "x$HAVE_WIN32" = xyes] )
-AC_SUBST(ESOUND_LIBS)
-AC_SUBST(ESOUND_LDFLAGS)
-AC_SUBST(ESOUND_CFLAGS)
-AM_CONDITIONAL( [HAVE_ESOUND], [test "x$HAVE_ESOUND" = xyes] )
-AC_SUBST(JACK_LIBS)
-AC_SUBST(JACK_LDFLAGS)
-AC_SUBST(JACK_CFLAGS)
-AM_CONDITIONAL( [HAVE_JACK], [test "x$HAVE_JACK" = xyes] )
-AC_SUBST(PORTAUDIO_LIBS)
-AC_SUBST(PORTAUDIO_LDFLAGS)
-AC_SUBST(PORTAUDIO_CFLAGS)
-AM_CONDITIONAL( [HAVE_PORTAUDIO], [test "x$HAVE_PORTAUDIO" = xyes] )
-AC_SUBST(PULSE_LIBS)
-AC_SUBST(PULSE_LDFLAGS)
-AC_SUBST(PULSE_CFLAGS)
-AM_CONDITIONAL( [HAVE_PULSE], [test "x$HAVE_PULSE" = xyes] )
-AC_SUBST(SDL_LIBS)
-AC_SUBST(SDL_LDFLAGS)
-AC_SUBST(SDL_CFLAGS)
-AM_CONDITIONAL( [HAVE_SDL], [test "x$HAVE_SDL" = xyes] )
-AC_SUBST(NAS_LIBS)
-AC_SUBST(NAS_LDFLAGS)
-AC_SUBST(NAS_CFLAGS)
-AM_CONDITIONAL( [HAVE_NAS], [test "x$HAVE_NAS" = xyes] )
-AC_SUBST(DUMMY_LIBS)
-AC_SUBST(DUMMY_LDFLAGS)
-AC_SUBST(DUMMY_CFLAGS)
-AM_CONDITIONAL( [HAVE_DUMMY], [test "x$HAVE_DUMMY" = xyes] )
+AC_SUBST( CPU_TYPE_LIB )
 
 
-# Did user choose default audio subsystem ?
-if test "x$with_default_audio" != "x"; then
-	default_output_module=$with_default_audio
-else 
-	default_output_module=`echo "$output_modules" | $AWK '{ print $1 }'`
-fi
-AC_DEFINE_UNQUOTED( DEFAULT_OUTPUT_MODULE, "$default_output_module", [The default audio output module to use] )
 
-OUTPUT_OBJ=
-OUTPUT_MOD=
-OUTPUT_CFLAGS=
-OUTPUT_LIBS=
-OUTPUT_LDFLAGS=
-
-# Setup the static build.
-if test "x$modules" = xdisabled
-then
-	echo "Preparing static output $default_output_module"
-	OUTPUT_MOD="$default_output_module"
-	OUTPUT_OBJ="output/$default_output_module.\$(OBJEXT)"
-	OUTPUT_CFLAGS=
-	OUTPUT_LIBS=
-	# That feels stupid... what about hashed arrays?
-	case $OUTPUT_MOD in
-	# Here's a script for that tedious list, perhaps to be outsourced together with the one in src/output/Makefile.am
-#for i in alsa coreaudio esound jack nas oss portaudio pulse sdl sun win32; do echo $i; done |
-#perl -ne 'chomp; $big = uc($_); print <<EOT;
-#		$_)
-#			OUTPUT_LIBS="\$${big}_LIBS"
-#			OUTPUT_LDFLAGS="\$${big}_LDFLAGS"
-#			OUTPUT_CFLAGS="\$${big}_CFLAGS"
-#		;;
-#EOT
-#'
-		alsa)
-			OUTPUT_LIBS="$ALSA_LIBS"
-			OUTPUT_LDFLAGS="$ALSA_LDFLAGS"
-			OUTPUT_CFLAGS="$ALSA_CFLAGS"
-		;;
-		coreaudio)
-			OUTPUT_LIBS="$COREAUDIO_LIBS"
-			OUTPUT_LDFLAGS="$COREAUDIO_LDFLAGS"
-			OUTPUT_CFLAGS="$COREAUDIO_CFLAGS"
-		;;
-		esound)
-			OUTPUT_LIBS="$ESOUND_LIBS"
-			OUTPUT_LDFLAGS="$ESOUND_LDFLAGS"
-			OUTPUT_CFLAGS="$ESOUND_CFLAGS"
-		;;
-		jack)
-			OUTPUT_LIBS="$JACK_LIBS"
-			OUTPUT_LDFLAGS="$JACK_LDFLAGS"
-			OUTPUT_CFLAGS="$JACK_CFLAGS"
-		;;
-		nas)
-			OUTPUT_LIBS="$NAS_LIBS"
-			OUTPUT_LDFLAGS="$NAS_LDFLAGS"
-			OUTPUT_CFLAGS="$NAS_CFLAGS"
-		;;
-		oss)
-			OUTPUT_LIBS="$OSS_LIBS"
-			OUTPUT_LDFLAGS="$OSS_LDFLAGS"
-			OUTPUT_CFLAGS="$OSS_CFLAGS"
-		;;
-		portaudio)
-			OUTPUT_LIBS="$PORTAUDIO_LIBS"
-			OUTPUT_LDFLAGS="$PORTAUDIO_LDFLAGS"
-			OUTPUT_CFLAGS="$PORTAUDIO_CFLAGS"
-		;;
-		pulse)
-			OUTPUT_LIBS="$PULSE_LIBS"
-			OUTPUT_LDFLAGS="$PULSE_LDFLAGS"
-			OUTPUT_CFLAGS="$PULSE_CFLAGS"
-		;;
-		sdl)
-			OUTPUT_LIBS="$SDL_LIBS"
-			OUTPUT_LDFLAGS="$SDL_LDFLAGS"
-			OUTPUT_CFLAGS="$SDL_CFLAGS"
-		;;
-		sun)
-			OUTPUT_LIBS="$SUN_LIBS"
-			OUTPUT_LDFLAGS="$SUN_LDFLAGS"
-			OUTPUT_CFLAGS="$SUN_CFLAGS"
-		;;
-		win32)
-			OUTPUT_LIBS="$WIN32_LIBS"
-			OUTPUT_LDFLAGS="$WIN32_LDFLAGS"
-			OUTPUT_CFLAGS="$WIN32_CFLAGS"
-		;;
-	esac
-fi
-
-AC_SUBST( OUTPUT_OBJ )
-AC_SUBST( OUTPUT_MOD )
-AC_SUBST( OUTPUT_CFLAGS )
-AC_SUBST( OUTPUT_LIBS )
-AC_SUBST( OUTPUT_LDFLAGS )
 
 dnl ############## Compiler Optimizations
 
@@ -954,47 +565,194 @@ fi
 
 AC_DEFINE_UNQUOTED(INDEX_SIZE, $seektable, [size of the frame index seek table])
 
+dnl ############## Audio Sub-system Settings
+
+# Choose audio subsystem based on what we have.
+if test $cpu_type = "generic_float"; then
+	audio_system="dummy"
+	AC_MSG_WARN( Defaulting to dummy output with float samples, as the audio device system cannot handle floats. )
+elif   test "x$HAVE_ALSA" = "xyes"; then
+	audio_system="alsa"
+elif test "x$HAVE_OSS" = "xyes"; then
+	audio_system="oss"
+elif test "x$HAVE_MACOSXAUDIO" = "xyes"; then
+	audio_system="coreaudio"
+elif test "x$HAVE_SUNAUDIO" = "xyes"; then
+	audio_system="sun"
+elif test "x$HAVE_WINMM" = "xyes"; then
+	audio_system="win32"
+elif test "x$HAVE_JACK" = "xyes"; then
+	audio_system="jack"
+elif test "x$HAVE_PORTAUDIO" = "xyes"; then
+	audio_system="portaudio"
+elif test "x$HAVE_NAS" = "xyes"; then
+	audio_system="nas"
+elif test "x$HAVE_SDL" = "xyes"; then
+	audio_system="sdl"
+elif test "x$HAVE_ESOUND" = "xyes"; then
+	audio_system="esd"
+else
+	audio_system="dummy"
+fi
+
+
+# Did user choose other audio type ?
+if test "x$with_audio" != "x"; then
+	audio_system=$with_audio
+fi
+
+
+AUDIO_OBJ="audio_$audio_system.\$(OBJEXT)"
+AUDIO_CFLAGS=""
+AUDIO_LIBS=""
+
+case $audio_system in
+  aix)
+    # Currently unsupported in the new build system
+  ;;
+  alib)
+    # Currently unsupported in the new build system
+    AUDIO_CFLAGS="-I/opt/audio/include"
+  ;;
+  alsa)
+    if test "x$HAVE_ALSA" != "xyes" ; then
+  		AC_MSG_ERROR( ALSA is not available for audio output subsystem. )
+    fi
+    AUDIO_CFLAGS=""
+    AUDIO_LIBS="-lasound"
+  ;;
+  dummy) 
+    AC_MSG_WARN( Using dummy audio output. )
+  ;;
+  esd)
+  	if test "x$HAVE_ESOUND" != "xyes" ; then
+  		AC_MSG_WARN( ESounD is not available for audio output subsystem. )
+  	fi
+    AUDIO_CFLAGS=$ESOUND_CFLAGS
+    AUDIO_LIBS=$ESOUND_LIBS
+  ;;
+  hp)
+    # Currently unsupported in the new build system
+  	AUDIO_CFLAGS="-I/opt/audio/include"
+  	AUDIO_LIBS="-L/opt/audio/lib -lAlib"
+  ;;
+  jack)
+  	if test "x$HAVE_JACK" != "xyes" ; then
+  		AC_MSG_ERROR( JACK is not available for audio output subsystem. )
+  	fi
+    AUDIO_CFLAGS=$JACK_CFLAGS
+    AUDIO_LIBS=$JACK_LIBS
+  ;;
+  coreaudio|macosx)
+  	if test "x$HAVE_MACOSXAUDIO" != "xyes" ; then
+  		AC_MSG_ERROR( Can't find Mac OS X's audio header files )
+  	fi
+  	AUDIO_LIBS="-framework AudioToolbox -framework AudioUnit -framework CoreServices"
+  ;;
+  mint)
+    # Currently unsupported in the new build system
+  ;;
+  nas)
+  	if test "x$HAVE_NAS" != "xyes" ; then
+  		AC_MSG_ERROR( NAS (Network Audio System) is not available. )
+  	fi
+    AUDIO_CFLAGS=""
+    AUDIO_LIBS="-laudio"
+  ;;
+  os2)
+    # Currently unsupported in the new build system
+  ;;
+  oss)
+    if test "x$HAVE_OSS" = "xyes"
+    then
+		AUDIO_CFLAGS=""
+		AUDIO_LIBS=""
+	else 
+		AC_MSG_ERROR([Can't find OSS header files])
+	fi
+  ;;
+  portaudio)
+  	if test "x$HAVE_PORTAUDIO" != "xyes" ; then
+  		AC_MSG_ERROR( PortAudio is not available. )
+  	fi
+    AUDIO_CFLAGS=""
+    AUDIO_LIBS="-lportaudio"
+		if test "x$HAVE_PORTAUDIO_WINMM" = "xyes"; then
+			AUDIO_LIBS="$AUDIO_LIBS -lwinmm"
+		fi
+  ;;
+  sdl)
+		if test "x$HAVE_SDL" != "xyes" ; then
+			AC_MSG_WARN( SDL not found via pkgconfig. Make sure you add some CPP/CFLAGS and LDFLAGS. )
+		fi
+		AUDIO_CFLAGS=$SDL_CFLAGS
+		AUDIO_LIBS=$SDL_LIBS
+  ;;
+  sgi)
+  # experimenting
+    AUDIO_CFLAGS=-DSGI
+    AUDIO_LIBS=-laudio
+  ;;
+  sun)
+    if test "x${ac_cv_header_sun_audioio_h}" = "xyes" \
+         -o "x${ac_cv_header_sys_audioio_h}" = "xyes" \
+         -o "x${ac_cv_header_asm_audioio_h}" = "xyes";
+    then
+		AUDIO_CFLAGS=""
+		AUDIO_LIBS=""
+	else 
+		AC_MSG_ERROR([Can't find Sun Audio header files])
+	fi
+  ;;
+	win32)
+		AUDIO_LIBS=-lwinmm
+		AUDIO_CFLAGS=
+	;;
+  *)
+  	AC_MSG_ERROR([Unknown Audio sub-system '$audio_system'.])
+  ;;
+esac
+
+AC_SUBST(AUDIO_OBJ)
+AC_SUBST(AUDIO_CFLAGS)
+AC_SUBST(AUDIO_LIBS)
+
+
 
 dnl ############## Final Output
 
-AC_CONFIG_FILES([
-	Makefile
-	src/Makefile
-	src/output/Makefile
-	src/libmpg123/Makefile
-])
-
-AC_OUTPUT
+AC_OUTPUT([Makefile src/Makefile])
 
 
 
 dnl ############## Display Message
 
-echo "
-  $PACKAGE_NAME $PACKAGE_VERSION
+echo -n "
+  $PACKAGE $VERSION
 
   Install path ............ $prefix
   CPU Optimisation......... $cpu_type
   Compiler Optimization ... $with_optimization
+  Audio output ............ $audio_system (detected:"
+test "x$HAVE_ALSA"        = "xyes" && echo -n " alsa"
+test "x$HAVE_OSS"         = "xyes" && echo -n " oss"
+test "x$HAVE_MACOSXAUDIO" = "xyes" && echo -n " coreaudio"
+test "x$HAVE_SUNAUDIO"    = "xyes" && echo -n " sun"
+test "x$HAVE_JACK"        = "xyes" && echo -n " jack"
+test "x$HAVE_PORTAUDIO"   = "xyes" && echo -n " portaudio"
+test "x$HAVE_NAS"         = "xyes" && echo -n " nas"
+test "x$HAVE_SDL"         = "xyes" && echo -n " sdl"
+test "x$HAVE_ESOUND"      = "xyes" && echo -n " esd"
+test "x$HAVE_WINMM"       = "xyes" && echo -n " win32"
+echo ")
   Gapless Support ......... $gapless
   Debugging ............... $debugging
   Seek table size ......... $seektable
   FIFO support ............ $fifo
 "
-if test "$modules" = enabled; then
-	echo "  Modules Directory ....... $pkglibdir"
-fi
-echo "  Checked audio modules ... $check_modules
-  Detected audio support ..$output_modules
-  Default output module ... $default_output_module
-"
 if test $cpu_type = "generic_float"; then
 	echo "You chose the generic build with 32bit float output.
 That means output via -s, -O or -w to a file/pipe and no buffer.
-"
-fi
-if test "$modules" = disabled; then
-echo "The _single_ active output module is being statically linked in.
 "
 fi
 if test $with_optimization = "0"; then
@@ -1004,6 +762,8 @@ fi
 if test "$debugging" = "enabled"; then
 	echo "CFLAGS='$CFLAGS'"
 	echo "LIBS='$LIBS'"
+	echo "AUDIO_CFLAGS='$AUDIO_CFLAGS'"
+	echo "AUDIO_LIBS='$AUDIO_LIBS'"
 else
     echo "Next type 'make' and then 'make install'."
 fi

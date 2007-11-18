@@ -7,7 +7,6 @@
 */
 
 #define ME "main"
-#include "mpg123app.h"
 #include "mpg123.h"
 
 #ifdef HAVE_SYS_WAIT_H
@@ -38,12 +37,17 @@
 #include "getlopt.h"
 #include "buffer.h"
 #include "term.h"
+#ifdef GAPLESS
+#include "layer3.h"
+#endif
 #include "playlist.h"
-#include "httpget.h"
-#include "id3print.h"
-#include "getbits.h"
-#include "httpget.h"
-#include "getcpuflags.h"
+#include "id3.h"
+#include "icy.h"
+
+#ifdef OPT_MPLAYER
+/* disappear! */
+func_dct64 mpl_dct64;
+#endif
 
 static void usage(int err);
 static void want_usage(char* arg);
@@ -61,69 +65,95 @@ struct parameter param = {
   FALSE , /* silent operation */
   FALSE , /* xterm title on/off */
   0 ,     /* second level buffer size */
+  TRUE ,  /* resync after stream error */
   0 ,     /* verbose level */
-  DEFAULT_OUTPUT_MODULE,	/* output module */
-  NULL,   /* output device */
-  0,      /* destination (headphones, ...) */
 #ifdef HAVE_TERMIOS
   FALSE , /* term control */
 #endif
+  0 ,     /* force mono */
+  0 ,     /* force stereo */
+  0 ,     /* force 8bit */
+  0 ,     /* force rate */
+  0 , 	  /* down sample */
   FALSE , /* checkrange */
+  0 ,	  /* doublespeed */
+  0 ,	  /* halfspeed */
   0 ,	  /* force_reopen, always (re)opens audio device for next song */
+  #ifdef OPT_3DNOW
+  0 ,     /* autodetect from CPUFLAGS */
+  #endif
   /* test_cpu flag is valid for multi and 3dnow.. even if 3dnow is built alone; ensure it appears only once */
+  #ifdef OPT_MULTI
   FALSE , /* normal operation */
+  #else
+  #ifdef OPT_3DNOW
+  FALSE , /* normal operation */
+  #endif
+  #endif
   FALSE,  /* try to run process in 'realtime mode' */   
   { 0,},  /* wav,cdr,au Filename */
+#ifdef GAPLESS
+	0, /* gapless off per default - yet */
+#endif
 	0, /* default is to play all titles in playlist */
+	0, /* do not use rva per default */
 	NULL, /* no playlist per default */
 	0 /* condensed id3 per default */
-	,0 /* list_cpu */
-	,NULL /* cpu */ 
+	#ifdef OPT_MULTI
+	,NULL /* choose optimization */
+	,0
+	#endif
 #ifdef FIFO
 	,NULL
 #endif
 #ifndef WIN32
-	,0 /* timeout */
+	,0
 #endif
-	,1 /* loop */
-	,0 /* index */
-	/* Parameters for mpg123 handle, defaults are queried from library! */
-	,0 /* down_sample */
-	,0 /* rva */
-	,0 /* halfspeed */
-	,0 /* doublespeed */
-	,0 /* start_frame */
-	,-1 /* frame_number */
-	,0 /* outscale */
-	,0 /* flags */
-	,0 /* force_rate */
-	,1 /* ICY */
+	,1
 };
 
-int utf8env = 0;
-mpg123_handle *mh = NULL;
-off_t framenum;
-off_t frames_left;
-audio_output_t *ao = NULL;
-txfermem *buffermem = NULL;
 char *prgName = NULL;
-/* ThOr: pointers are not TRUE or FALSE */
 char *equalfile = NULL;
-struct httpdata htd;
-int fresh = TRUE;
-
+/* ThOr: pointers are not TRUE or FALSE */
+int have_eq_settings = FALSE;
+scale_t outscale  = MAXOUTBURST;
+long numframes = -1;
+long startFrame= 0;
 int buffer_fd[2];
 int buffer_pid;
-size_t bufferblock = 0;
 
 static int intflag = FALSE;
+
 int OutputDescriptor;
-static int filept = -1;
+
+/* A safe realloc also for very old systems where realloc(NULL, size) returns NULL. */
+void *safe_realloc(void *ptr, size_t size)
+{
+	if(ptr == NULL) return malloc(size);
+	else return realloc(ptr, size);
+}
+
+#ifndef HAVE_STRERROR
+const char *strerror(int errnum)
+{
+  extern int sys_nerr;
+  extern char *sys_errlist[];
+
+  return (errnum < sys_nerr) ?  sys_errlist[errnum]  :  "";
+}
+#endif
 
 #if !defined(WIN32) && !defined(GENERIC)
+#ifndef NOXFERMEM
+static void catch_child(void)
+{
+  while (waitpid(-1, NULL, WNOHANG) > 0);
+}
+#endif
+
 static void catch_interrupt(void)
 {
-	intflag = TRUE;
+  intflag = TRUE;
 }
 #endif
 
@@ -135,117 +165,175 @@ void next_track(void)
 
 void safe_exit(int code)
 {
-	char *dummy, *dammy;
 #ifdef HAVE_TERMIOS
 	if(param.term_ctrl)
 		term_restore();
 #endif
-	if(mh != NULL) mpg123_delete(mh);
-	mpg123_exit();
-	httpdata_reset(&htd);
-	/* It's ugly... but let's just fix this still-reachable memory chunk of static char*. */
-	split_dir_file("", &dummy, &dammy);
 	exit(code);
 }
 
-/* returns 1 if reset_audio needed instead */
-static void set_output_module( char *arg )
-{
-	int i;
-		
-	/* Search for a colon and set the device if found */
-	for(i=0; i< strlen( arg ); i++) {
-		if (arg[i] == ':') {
-			arg[i] = 0;
-			param.output_device = &arg[i+1];
-			debug1("Setting output device: %s", param.output_device);
-			break;
-		}	
-	}
-	/* Set the output module */
-	param.output_module = arg;
-	debug1("Setting output module: %s", param.output_module );
-}
+static struct frame fr;
+struct audio_info_struct ai,pre_ai;
+txfermem *buffermem = NULL;
+#define FRAMEBUFUNIT (18 * 64 * 4)
 
-static void set_output_flag(int flag)
+void set_synth_functions(struct frame *fr);
+
+void init_output(void)
 {
-  if(param.output_flags <= 0) param.output_flags = flag;
-  else param.output_flags |= flag;
+  static int init_done = FALSE;
+
+  if (init_done)
+    return;
+  init_done = TRUE;
+#ifndef NOXFERMEM
+  /*
+   * Only DECODE_AUDIO and DECODE_FILE are sanely handled by the
+   * buffer process. For now, we just ignore the request
+   * to buffer the output. [dk]
+   */
+  if (param.usebuffer && (param.outmode != DECODE_AUDIO) &&
+      (param.outmode != DECODE_FILE)) {
+    fprintf(stderr, "Sorry, won't buffer output unless writing plain audio.\n");
+    param.usebuffer = 0;
+  } 
+  
+  if (param.usebuffer) {
+    unsigned int bufferbytes;
+    sigset_t newsigset, oldsigset;
+    if (param.usebuffer < 32)
+      param.usebuffer = 32; /* minimum is 32 Kbytes! */
+    bufferbytes = (param.usebuffer * 1024);
+    bufferbytes -= bufferbytes % FRAMEBUFUNIT;
+	/* +1024 for NtoM rounding problems */
+    xfermem_init (&buffermem, bufferbytes ,0,1024);
+    pcm_sample = (unsigned char *) buffermem->data;
+    pcm_point = 0;
+    sigemptyset (&newsigset);
+    sigaddset (&newsigset, SIGUSR1);
+    sigprocmask (SIG_BLOCK, &newsigset, &oldsigset);
+    #if !defined(WIN32) && !defined(GENERIC)
+    catchsignal (SIGCHLD, catch_child);
+	 #endif
+    switch ((buffer_pid = fork())) {
+      case -1: /* error */
+        perror("fork()");
+        safe_exit(1);
+      case 0: /* child */
+        if(rd)
+          rd->close(rd); /* child doesn't need the input stream */
+        xfermem_init_reader (buffermem);
+        buffer_loop (&ai, &oldsigset);
+        xfermem_done_reader (buffermem);
+        xfermem_done (buffermem);
+        exit(0);
+      default: /* parent */
+        xfermem_init_writer (buffermem);
+        param.outmode = DECODE_BUFFER;
+    }
+  }
+  else {
+#endif
+	/* + 1024 for NtoM rate converter */
+    if (!(pcm_sample = (unsigned char *) malloc(audiobufsize * 2 + 1024))) {
+      perror ("malloc()");
+      safe_exit (1);
+#ifndef NOXFERMEM
+    }
+#endif
+  }
+
+  switch(param.outmode) {
+    case DECODE_AUDIO:
+      if(audio_open(&ai) < 0) {
+        perror("audio");
+        safe_exit(1);
+      }
+      break;
+    case DECODE_WAV:
+      wav_open(&ai,param.filename);
+      break;
+    case DECODE_AU:
+      au_open(&ai,param.filename);
+      break;
+    case DECODE_CDR:
+      cdr_open(&ai,param.filename);
+      break;
+  }
 }
 
 static void set_output_h(char *a)
 {
-	set_output_flag(AUDIO_OUT_HEADPHONES);
+  if(ai.output <= 0)
+    ai.output = AUDIO_OUT_HEADPHONES;
+  else
+    ai.output |= AUDIO_OUT_HEADPHONES;
 }
-
 static void set_output_s(char *a)
 {
-	set_output_flag(AUDIO_OUT_INTERNAL_SPEAKER);
+  if(ai.output <= 0)
+    ai.output = AUDIO_OUT_INTERNAL_SPEAKER;
+  else
+    ai.output |= AUDIO_OUT_INTERNAL_SPEAKER;
 }
-
 static void set_output_l(char *a)
 {
-	set_output_flag(AUDIO_OUT_LINE_OUT);
+  if(ai.output <= 0)
+    ai.output = AUDIO_OUT_LINE_OUT;
+  else
+    ai.output |= AUDIO_OUT_LINE_OUT;
 }
 
-static void set_output(char *arg)
+static void set_output (char *arg)
 {
-	/* If single letter, it's the legacy output switch for AIX/HP/Sun.
-	   If longer, it's module[:device] . If zero length, it's rubbish. */
-	if(strlen(arg) <= 1) switch(arg[0])
-	{
-		case 'h': set_output_h(arg); break;
-		case 's': set_output_s(arg); break;
-		case 'l': set_output_l(arg); break;
-		default:
-			error1("\"%s\" is no valid output", arg);
-			safe_exit(1);
-	}
-	else set_output_module(arg);
+    switch (*arg) {
+        case 'h': set_output_h(arg); break;
+        case 's': set_output_s(arg); break;
+        case 'l': set_output_l(arg); break;
+        default:
+            error3("%s: Unknown argument \"%s\" to option \"%s\".\n",
+                prgName, arg, loptarg);
+            safe_exit(1);
+    }
 }
 
-static void set_verbose (char *arg)
+void set_verbose (char *arg)
 {
     param.verbose++;
 }
-
-static void set_out_wav(char *arg)
+void set_wav(char *arg)
 {
-	param.outmode = DECODE_WAV;
-	strncpy(param.filename,arg,255);
-	param.filename[255] = 0;
+  param.outmode = DECODE_WAV;
+  strncpy(param.filename,arg,255);
+  param.filename[255] = 0;
 }
-
-void set_out_cdr(char *arg)
+void set_cdr(char *arg)
 {
-	param.outmode = DECODE_CDR;
-	strncpy(param.filename,arg,255);
-	param.filename[255] = 0;
+  param.outmode = DECODE_CDR;
+  strncpy(param.filename,arg,255);
+  param.filename[255] = 0;
 }
-
-void set_out_au(char *arg)
+void set_au(char *arg)
 {
   param.outmode = DECODE_AU;
   strncpy(param.filename,arg,255);
   param.filename[255] = 0;
 }
-
-static void set_out_file(char *arg)
+static void SetOutFile(char *Arg)
 {
 	param.outmode=DECODE_FILE;
 	#ifdef WIN32
-	OutputDescriptor=_open(arg,_O_CREAT|_O_WRONLY|_O_BINARY|_O_TRUNC,0666);
+	OutputDescriptor=_open(Arg,_O_CREAT|_O_WRONLY|_O_BINARY|_O_TRUNC,0666);
 	#else
-	OutputDescriptor=open(arg,O_CREAT|O_WRONLY|O_TRUNC,0666);
+	OutputDescriptor=open(Arg,O_CREAT|O_WRONLY|O_TRUNC,0666);
 	#endif
 	if(OutputDescriptor==-1)
 	{
-		error2("Can't open %s for writing (%s).\n",arg,strerror(errno));
+		error2("Can't open %s for writing (%s).\n",Arg,strerror(errno));
 		safe_exit(1);
 	}
 }
-
-static void set_out_stdout(char *arg)
+static void SetOutStdout(char *Arg)
 {
 	param.outmode=DECODE_FILE;
 	param.remote_err=TRUE;
@@ -254,30 +342,19 @@ static void set_out_stdout(char *arg)
 	_setmode(STDOUT_FILENO, _O_BINARY);
 	#endif
 }
-
-static void set_out_stdout1(char *arg)
+static void SetOutStdout1(char *Arg)
 {
-	param.outmode=DECODE_AUDIOFILE;
+  param.outmode=DECODE_AUDIOFILE;
 	param.remote_err=TRUE;
-	OutputDescriptor=STDOUT_FILENO;
+  OutputDescriptor=STDOUT_FILENO;
 	#ifdef WIN32
 	_setmode(STDOUT_FILENO, _O_BINARY);
 	#endif
 }
 
-#ifndef HAVE_SCHED_SETSCHEDULER
-static void realtime_not_compiled(char *arg)
+void realtime_not_compiled(char *arg)
 {
-	fprintf(stderr,"Option '-T / --realtime' not compiled into this binary.\n");
-}
-#endif
-
-static int frameflag; /* ugly, but that's the way without hacking getlopt */
-static void set_frameflag(char *arg)
-{
-	/* Only one mono flag at a time! */
-	if(frameflag & MPG123_FORCE_MONO) param.flags &= ~MPG123_FORCE_MONO;
-	param.flags |= frameflag;
+  fprintf(stderr,"Option '-T / --realtime' not compiled into this binary.\n");
 }
 
 /* Please note: GLO_NUM expects point to LONG! */
@@ -288,54 +365,50 @@ passed.
  *  Introduced GLO_INT and GLO_LONG as different bits to make that clear.
  *  GLO_NUM no longer exists.
  */
-#ifdef OPT_3DNOW
-static int dnow = 0; /* helper for mapping the old 3dnow options */
-#endif
 topt opts[] = {
-	{'k', "skip",        GLO_ARG | GLO_LONG, 0, &param.start_frame, 0},
+	{'k', "skip",        GLO_ARG | GLO_LONG, 0, &startFrame, 0},
+	{'a', "audiodevice", GLO_ARG | GLO_CHAR, 0, &ai.device,  0},
 	{'2', "2to1",        GLO_INT,  0, &param.down_sample, 1},
 	{'4', "4to1",        GLO_INT,  0, &param.down_sample, 2},
 	{'t', "test",        GLO_INT,  0, &param.outmode, DECODE_TEST},
-	{'s', "stdout",      GLO_INT,  set_out_stdout, &param.outmode, DECODE_FILE},
-	{'S', "STDOUT",      GLO_INT,  set_out_stdout1, &param.outmode,DECODE_AUDIOFILE},
-	{'O', "outfile",     GLO_ARG | GLO_CHAR, set_out_file, NULL, 0},
+	{'s', "stdout",      GLO_INT,  SetOutStdout, &param.outmode, DECODE_FILE},
+	{'S', "STDOUT",      GLO_INT,  SetOutStdout1, &param.outmode,DECODE_AUDIOFILE},
+	{'O', "outfile",     GLO_ARG | GLO_CHAR, SetOutFile, NULL, 0},
 	{'c', "check",       GLO_INT,  0, &param.checkrange, TRUE},
 	{'v', "verbose",     0,        set_verbose, 0,           0},
 	{'q', "quiet",       GLO_INT,  0, &param.quiet, TRUE},
-	{'y', "resync",      GLO_INT,  set_frameflag, &frameflag, MPG123_NO_RESYNC},
-	{'0', "single0",     GLO_INT,  set_frameflag, &frameflag, MPG123_MONO_LEFT},
-	{0,   "left",        GLO_INT,  set_frameflag, &frameflag, MPG123_MONO_LEFT},
-	{'1', "single1",     GLO_INT,  set_frameflag, &frameflag, MPG123_MONO_RIGHT},
-	{0,   "right",       GLO_INT,  set_frameflag, &frameflag, MPG123_MONO_RIGHT},
-	{'m', "singlemix",   GLO_INT,  set_frameflag, &frameflag, MPG123_MONO_MIX},
-	{0,   "mix",         GLO_INT,  set_frameflag, &frameflag, MPG123_MONO_MIX},
-	{0,   "mono",        GLO_INT,  set_frameflag, &frameflag, MPG123_MONO_MIX},
-	{0,   "stereo",      GLO_INT,  set_frameflag, &frameflag, MPG123_FORCE_STEREO},
+	{'y', "resync",      GLO_INT,  0, &param.tryresync, FALSE},
+	{'0', "single0",     GLO_INT,  0, &param.force_mono, MONO_LEFT},
+	{0,   "left",        GLO_INT,  0, &param.force_mono, MONO_LEFT},
+	{'1', "single1",     GLO_INT,  0, &param.force_mono, MONO_RIGHT},
+	{0,   "right",       GLO_INT,  0, &param.force_mono, MONO_RIGHT},
+	{'m', "singlemix",   GLO_INT,  0, &param.force_mono, MONO_MIX},
+	{0,   "mix",         GLO_INT,  0, &param.force_mono, MONO_MIX},
+	{0,   "mono",        GLO_INT,  0, &param.force_mono, MONO_MIX},
+	{0,   "stereo",      GLO_INT,  0, &param.force_stereo, 1},
 	{0,   "reopen",      GLO_INT,  0, &param.force_reopen, 1},
-/*	{'g', "gain",        GLO_ARG | GLO_LONG, 0, &ao.gain,    0}, FIXME */
+	{'g', "gain",        GLO_ARG | GLO_LONG, 0, &ai.gain,    0},
 	{'r', "rate",        GLO_ARG | GLO_LONG, 0, &param.force_rate,  0},
-	{0,   "8bit",        GLO_INT,  set_frameflag, &frameflag, MPG123_FORCE_8BIT},
+	{0,   "8bit",        GLO_INT,  0, &param.force_8bit, 1},
 	{0,   "headphones",  0,                  set_output_h, 0,0},
 	{0,   "speaker",     0,                  set_output_s, 0,0},
 	{0,   "lineout",     0,                  set_output_l, 0,0},
 	{'o', "output",      GLO_ARG | GLO_CHAR, set_output, 0,  0},
-	{0,   "list-modules",0,        list_modules, NULL,  0}, 
-	{'a', "audiodevice", GLO_ARG | GLO_CHAR, 0, &param.output_device,  0},
 #ifdef FLOATOUT
-	{'f', "scale",       GLO_ARG | GLO_DOUBLE, 0, &param.outscale,   0},
+	{'f', "scale",       GLO_ARG | GLO_DOUBLE, 0, &outscale,   0},
 #else
-	{'f', "scale",       GLO_ARG | GLO_LONG, 0, &param.outscale,   0},
+	{'f', "scale",       GLO_ARG | GLO_LONG, 0, &outscale,   0},
 #endif
-	{'n', "frames",      GLO_ARG | GLO_LONG, 0, &param.frame_number,  0},
+	{'n', "frames",      GLO_ARG | GLO_LONG, 0, &numframes,  0},
 	#ifdef HAVE_TERMIOS
 	{'C', "control",     GLO_INT,  0, &param.term_ctrl, TRUE},
 	#endif
 	{'b', "buffer",      GLO_ARG | GLO_LONG, 0, &param.usebuffer,  0},
 	{'R', "remote",      GLO_INT,  0, &param.remote, TRUE},
 	{0,   "remote-err",  GLO_INT,  0, &param.remote_err, TRUE},
-	{'d', "doublespeed", GLO_ARG | GLO_LONG, 0, &param.doublespeed, 0},
-	{'h', "halfspeed",   GLO_ARG | GLO_LONG, 0, &param.halfspeed, 0},
-	{'p', "proxy",       GLO_ARG | GLO_CHAR, 0, &htd.proxyurl,   0},
+	{'d', "doublespeed", GLO_ARG | GLO_LONG, 0, &param.doublespeed,0},
+	{'h', "halfspeed",   GLO_ARG | GLO_LONG, 0, &param.halfspeed,  0},
+	{'p', "proxy",       GLO_ARG | GLO_CHAR, 0, &proxyurl,   0},
 	{'@', "list",        GLO_ARG | GLO_CHAR, 0, &param.listname,   0},
 	/* 'z' comes from the the german word 'zufall' (eng: random) */
 	{'z', "shuffle",     GLO_INT,  0, &param.shuffle, 1},
@@ -345,15 +418,15 @@ topt opts[] = {
 	{0,   "aggressive",	 GLO_INT,  0, &param.aggressive, 2},
 	#endif
 	#ifdef OPT_3DNOW
-#define SET_3DNOW 1
-#define SET_I586  2
-	{0,   "force-3dnow", GLO_CHAR,  0, &dnow, SET_3DNOW},
-	{0,   "no-3dnow",    GLO_CHAR,  0, &dnow, SET_I586},
+	{0,   "force-3dnow", GLO_INT,  0, &param.stat_3dnow, 1},
+	{0,   "no-3dnow",    GLO_INT,  0, &param.stat_3dnow, 2},
 	{0,   "test-3dnow",  GLO_INT,  0, &param.test_cpu, TRUE},
 	#endif
+	#ifdef OPT_MULTI
 	{0, "cpu", GLO_ARG | GLO_CHAR, 0, &param.cpu,  0},
 	{0, "test-cpu",  GLO_INT,  0, &param.test_cpu, TRUE},
 	{0, "list-cpu", GLO_INT,  0, &param.list_cpu , 1},
+	#endif
 	#if !defined(WIN32) && !defined(GENERIC)
 	{'u', "auth",        GLO_ARG | GLO_CHAR, 0, &httpauth,   0},
 	#endif
@@ -364,11 +437,11 @@ topt opts[] = {
 	{'T', "realtime",    0,  realtime_not_compiled, 0,           0 },    
 	#endif
 	{0, "title",         GLO_INT,  0, &param.xterm_title, TRUE },
-	{'w', "wav",         GLO_ARG | GLO_CHAR, set_out_wav, 0, 0 },
-	{0, "cdr",           GLO_ARG | GLO_CHAR, set_out_cdr, 0, 0 },
-	{0, "au",            GLO_ARG | GLO_CHAR, set_out_au, 0, 0 },
+	{'w', "wav",         GLO_ARG | GLO_CHAR, set_wav, 0 , 0 },
+	{0, "cdr",           GLO_ARG | GLO_CHAR, set_cdr, 0 , 0 },
+	{0, "au",            GLO_ARG | GLO_CHAR, set_au, 0 , 0 },
 	#ifdef GAPLESS
-	{0,   "gapless",	 GLO_INT,  set_frameflag, &frameflag, MPG123_GAPLESS},
+	{0,   "gapless",	 GLO_INT,  0, &param.gapless, 1},
 	#endif
 	{'?', "help",            0,  want_usage, 0,           0 },
 	{0 , "longhelp" ,        0,  want_long_usage, 0,      0 },
@@ -378,7 +451,6 @@ topt opts[] = {
 	{0, "rva-radio",         GLO_INT,  0, &param.rva, 1 },
 	{0, "rva-album",         GLO_INT,  0, &param.rva, 2 },
 	{0, "rva-audiophile",         GLO_INT,  0, &param.rva, 2 },
-	{0, "no-icy-meta",      GLO_INT,  0, &param.talk_icy, 0 },
 	{0, "long-tag",         GLO_INT,  0, &param.long_id3, 1 },
 #ifdef FIFO
 	{0, "fifo", GLO_ARG | GLO_CHAR, 0, &param.fifo,  0},
@@ -387,7 +459,6 @@ topt opts[] = {
 	{0, "timeout", GLO_ARG | GLO_LONG, 0, &param.timeout, 0},
 #endif
 	{0, "loop", GLO_ARG | GLO_LONG, 0, &param.loop, 0},
-	{'i', "index", GLO_INT, 0, &param.index, 1},
 	{0, 0, 0, 0, 0, 0}
 };
 
@@ -413,208 +484,269 @@ static void reset_audio(void)
 		buffermem->freeindex = 0;
 		if (intflag)
 			return;
-		buffermem->buf[0] = ao->rate; 
-		buffermem->buf[1] = ao->channels; 
-		buffermem->buf[2] = ao->format;
+		buffermem->buf[0] = ai.rate; 
+		buffermem->buf[1] = ai.channels; 
+		buffermem->buf[2] = ai.format;
 		buffer_reset();
 	}
 	else 
 #endif
 	if (param.outmode == DECODE_AUDIO) {
-		/* audio_reset_parameters(ao); */
+		/* audio_reset_parameters(&ai); */
 		/*   close and re-open in order to flush
 		 *   the device's internal buffer before
 		 *   changing the sample rate.   [OF]
 		 */
-		if(reset_output(ao) < 0)
-		{
-			error1("failed to reset audio device: %s", strerror(errno));
+		audio_close (&ai);
+		if (audio_open(&ai) < 0) {
+			perror("audio");
 			safe_exit(1);
 		}
 	}
 }
 
-/* 1 on success, 0 on failure */
-int open_track(char *fname)
+
+/*
+	precog the audio rate that will be set before output begins
+	this is needed to give gapless code a chance to keep track for firstframe != 0
+*/
+void prepare_audioinfo(struct frame *fr, struct audio_info_struct *nai)
 {
-	filept=-1;
-	if(MPG123_OK != mpg123_param(mh, MPG123_ICY_INTERVAL, 0, 0))
-	error1("Cannot (re)set ICY interval: %s", mpg123_strerror(mh));
-	if(!strcmp(fname, "-")) filept = STDIN_FILENO;
-	else if (!strncmp(fname, "http://", 7)) /* http stream */
-	{
-		httpdata_reset(&htd);
-		filept = http_open(fname, &htd);
-		/* now check if we got sth. and if we got sth. good */
-		if(    (filept >= 0) && (htd.content_type.p != NULL)
-			  && strcmp(htd.content_type.p, "audio/mpeg") && strcmp(htd.content_type.p, "audio/x-mpeg") )
-		{
-			error1("Unknown mpeg MIME type %s - is it perhaps a playlist (use -@)?", htd.content_type.p == NULL ? "<nil>" : htd.content_type.p);
-			error("If you know the stream is mpeg1/2 audio, then please report this as "PACKAGE_NAME" bug");
-			return 0;
-		}
-		if(MPG123_OK != mpg123_param(mh, MPG123_ICY_INTERVAL, htd.icy_interval, 0))
-		error1("Cannot set ICY interval: %s", mpg123_strerror(mh));
-		if(param.verbose > 1) fprintf(stderr, "Info: ICY interval %li\n", (long)htd.icy_interval);
-	}
-	debug("OK... going to finally open.");
-	/* Now hook up the decoder on the opened stream or the file. */
-	if(filept > -1)
-	{
-		if(mpg123_open_fd(mh, filept) != MPG123_OK)
-		{
-			error2("Cannot open fd %i: %s", filept, mpg123_strerror(mh));
-			return 0;
-		}
-	}
-	else if(mpg123_open(mh, fname) != MPG123_OK)
-	{
-		error2("Cannot open %s: %s", fname, mpg123_strerror(mh));
-		return 0;
-	}
-	debug("Track successfully opened.");
-	fresh = TRUE;
-	return 1;
+	long newrate = freqs[fr->sampling_frequency]>>(param.down_sample);
+	fr->down_sample = param.down_sample;
+	if(!audio_fit_capabilities(nai,fr->stereo,newrate)) safe_exit(1);
 }
 
-/* for symmetry */
-void close_track(void)
+/*
+ * play a frame read by read_frame();
+ * (re)initialize audio if necessary.
+ *
+ * needs a major rewrite .. it's incredible ugly!
+ */
+int play_frame(int init,struct frame *fr)
 {
-	mpg123_close(mh);
-	if(filept > -1) close(filept);
-	filept = -1;
-}
+	int clip;
+	long newrate;
+	long old_rate,old_format,old_channels;
 
-/* return 1 on success, 0 on failure */
-int play_frame(void)
-{
-	unsigned char *audio;
-	size_t bytes;
-	/* The first call will not decode anything but return MPG123_NEW_FORMAT! */
-	int mc = mpg123_decode_frame(mh, &framenum, &audio, &bytes);
-	/* Play what is there to play (starting with second decode_frame call!) */
-	if(bytes)
-	{
-		if(param.frame_number > -1) --frames_left;
-		if(fresh && framenum == param.start_frame && !param.quiet)
-		{
-			fresh = FALSE;
-			if(param.verbose) print_header(mh);
-			else print_header_compact(mh);
+	if(fr->header_change || init) {
+
+		if (!param.quiet && init) {
+			if (param.verbose)
+				print_header(fr);
+			else
+				print_header_compact(fr);
 		}
-#ifndef NOXFERMEM
-		if(param.usebuffer)
-		{ /* We decoded directly into the buffer's buffer. */
-			if(!intflag)
-			{
-				buffermem->freeindex =
-					(buffermem->freeindex + bytes) % buffermem->size;
-				if (buffermem->wakeme[XF_READER])
-					xfermem_putcmd(buffermem->fd[XF_WRITER], XF_CMD_WAKEUP_INFO);
-			}
-			mpg123_replace_buffer(mh, (unsigned char *) (buffermem->data + buffermem->freeindex), bufferblock);
-			while (xfermem_get_freespace(buffermem) < bufferblock)
-				if (xfermem_block(XF_WRITER, buffermem) == XF_CMD_TERMINATE)
-				{
-					intflag = TRUE;
-					break;
+
+		if(fr->header_change > 1 || init) {
+			old_rate = ai.rate;
+			old_format = ai.format;
+			old_channels = ai.channels;
+
+			newrate = freqs[fr->sampling_frequency]>>(param.down_sample);
+			prepare_audioinfo(fr, &ai);
+			if(param.verbose > 1) fprintf(stderr, "Note: audio output rate = %li\n", ai.rate);
+			#ifdef GAPLESS
+			if(param.gapless && (fr->lay == 3)) layer3_gapless_bytify(fr, &ai);
+			#endif
+			
+			/* check, whether the fitter set our proposed rate */
+			if(ai.rate != newrate) {
+				if(ai.rate == (newrate>>1) )
+					fr->down_sample++;
+				else if(ai.rate == (newrate>>2) )
+					fr->down_sample+=2;
+				else {
+					fr->down_sample = 3;
+					fprintf(stderr,"Warning, flexible rate not heavily tested!\n");
 				}
-			if(intflag) return 1;
-		}
-		else
-#endif
-		/* Normal flushing of data. */
-		flush_output(param.outmode, ao, audio, bytes);
-		if(param.checkrange)
-		{
-			long clip = mpg123_clip(mh);
-			if(clip > 0) fprintf(stderr,"%ld samples clipped\n", clip);
-		}
-	}
-	/* Special actions and errors. */
-	if(mc != MPG123_OK)
-	{
-		if(mc == MPG123_ERR || mc == MPG123_DONE)
-		{
-			if(mc == MPG123_ERR) error1("...in decoding next frame: %s", mpg123_strerror(mh));
-			return 0;
-		}
-		if(mc == MPG123_NO_SPACE)
-		{
-			error("I have not enough output space? I didn't plan for this.");
-			return 0;
-		}
-		if(mc == MPG123_NEW_FORMAT)
-		{
-			int ret = 0;
-			mpg123_getformat(mh, &ao->rate, &ao->channels, &ao->format);
-			/* from mpg123lib branch: if(init_output()) reset_audio(); */
-			/* does the newtrunk stuff fit here? */
-			ret = init_output(ao, mh);
-			if(ret == 1)
-			{
-				warning("I am not sure if my code is ready to switch audio format during playback!");
+				if(fr->down_sample > 3)
+					fr->down_sample = 3;
+			}
+
+			switch(fr->down_sample) {
+				case 0:
+				case 1:
+				case 2:
+					fr->down_sample_sblimit = SBLIMIT>>(fr->down_sample);
+					break;
+				case 3:
+					{
+						long n = freqs[fr->sampling_frequency];
+                                                long m = ai.rate;
+
+						if(!synth_ntom_set_step(n,m)) return 0;
+
+						if(n>m) {
+							fr->down_sample_sblimit = SBLIMIT * m;
+							fr->down_sample_sblimit /= n;
+						}
+						else {
+							fr->down_sample_sblimit = SBLIMIT;
+						}
+					}
+					break;
+			}
+
+			init_output();
+			if(ai.rate != old_rate || ai.channels != old_channels ||
+			   ai.format != old_format || param.force_reopen) {
+				if(!param.force_mono) {
+					if(ai.channels == 1)
+						fr->single = 3;
+					else
+						fr->single = -1;
+				}
+				else
+					fr->single = param.force_mono-1;
+
+				param.force_stereo &= ~0x2;
+				if(fr->single >= 0 && ai.channels == 2) {
+					param.force_stereo |= 0x2;
+				}
+
+				set_synth_functions(fr);
+				init_layer3(fr->down_sample_sblimit);
 				reset_audio();
-				/* safe_exit(-1); */
+				if(param.verbose) {
+					if(fr->down_sample == 3) {
+						long n = freqs[fr->sampling_frequency];
+						long m = ai.rate;
+						if(n > m) {
+							fprintf(stderr,"Audio: %2.4f:1 conversion,",(float)n/(float)m);
+						}
+						else {
+							fprintf(stderr,"Audio: 1:%2.4f conversion,",(float)m/(float)n);
+						}
+					}
+					else {
+						fprintf(stderr,"Audio: %ld:1 conversion,",(long)pow(2.0,fr->down_sample));
+					}
+ 					fprintf(stderr," rate: %ld, encoding: %s, channels: %d\n",ai.rate,audio_encoding_name(ai.format),ai.channels);
+				}
 			}
-			if(ret < 0)
-			{
-				error1("init_output() returned %i!", ret);
-				safe_exit(1);
-			}
+			if (intflag)
+				return 1;
 		}
 	}
+
+	if (fr->error_protection) {
+		getbits(16); /* skip crc */
+	}
+
+	/* do the decoding */
+	clip = (fr->do_layer)(fr,param.outmode,&ai);
+
+#ifndef NOXFERMEM
+	if (param.usebuffer) {
+		if (!intflag) {
+			buffermem->freeindex =
+				(buffermem->freeindex + pcm_point) % buffermem->size;
+			if (buffermem->wakeme[XF_READER])
+				xfermem_putcmd(buffermem->fd[XF_WRITER], XF_CMD_WAKEUP_INFO);
+		}
+		pcm_sample = (unsigned char *) (buffermem->data + buffermem->freeindex);
+		pcm_point = 0;
+		while (xfermem_get_freespace(buffermem) < (FRAMEBUFUNIT << 1))
+			if (xfermem_block(XF_WRITER, buffermem) == XF_CMD_TERMINATE) {
+				intflag = TRUE;
+				break;
+			}
+		if (intflag)
+			return 1;
+	}
+#endif
+
+	if(clip > 0 && param.checkrange)
+		fprintf(stderr,"%d samples clipped\n", clip);
 	return 1;
+}
+
+/* set synth functions for current frame, optimizations handled by opt_* macros */
+void set_synth_functions(struct frame *fr)
+{
+	int ds = fr->down_sample;
+	int p8=0;
+	static func_synth funcs[2][4] = { 
+		{ NULL,
+		  synth_2to1,
+		  synth_4to1,
+		  synth_ntom } ,
+		{ NULL,
+		  synth_2to1_8bit,
+		  synth_4to1_8bit,
+		  synth_ntom_8bit } 
+	};
+	static func_synth_mono funcs_mono[2][2][4] = {    
+		{ { NULL ,
+		    synth_2to1_mono2stereo ,
+		    synth_4to1_mono2stereo ,
+		    synth_ntom_mono2stereo } ,
+		  { NULL ,
+		    synth_2to1_8bit_mono2stereo ,
+		    synth_4to1_8bit_mono2stereo ,
+		    synth_ntom_8bit_mono2stereo } } ,
+		{ { NULL ,
+		    synth_2to1_mono ,
+		    synth_4to1_mono ,
+		    synth_ntom_mono } ,
+		  { NULL ,
+		    synth_2to1_8bit_mono ,
+		    synth_4to1_8bit_mono ,
+		    synth_ntom_8bit_mono } }
+	};
+
+	/* possibly non-constand entries filled here */
+	funcs[0][0] = opt_synth_1to1;
+	funcs[1][0] = opt_synth_1to1_8bit;
+	funcs_mono[0][0][0] = opt_synth_1to1_mono2stereo;
+	funcs_mono[0][1][0] = opt_synth_1to1_8bit_mono2stereo;
+	funcs_mono[1][0][0] = opt_synth_1to1_mono;
+	funcs_mono[1][1][0] = opt_synth_1to1_8bit_mono;
+
+	if((ai.format & AUDIO_FORMAT_MASK) == AUDIO_FORMAT_8)
+		p8 = 1;
+	fr->synth = funcs[p8][ds];
+	fr->synth_mono = funcs_mono[ai.channels==2 ? 0 : 1][p8][ds];
+
+	if(p8) {
+		if(make_conv16to8_table(ai.format) != 0)
+		{
+			/* it's a bit more work to get proper error propagation up */
+			safe_exit(1);
+		}
+	}
 }
 
 int main(int argc, char *argv[])
 {
 	int result;
-	long parr;
 	char *fname;
-	mpg123_pars *mp;
 #if !defined(WIN32) && !defined(GENERIC)
 	struct timeval start_time, now;
 	unsigned long secdiff;
-#endif
-	{
-		char *lang = getenv("LANG");
-		if(lang && strstr(lang, "UTF-8")) utf8env = 1;
-	}
-	httpdata_init(&htd);
-	result = mpg123_init();
-	if(result != MPG123_OK)
-	{
-		error1("Cannot initialize mpg123 library: %s", mpg123_plain_strerror(result));
-		safe_exit(77);
-	}
-	mp = mpg123_new_pars(&result);
-	if(mp == NULL)
-	{
-		error1("Crap! Cannot get mpg123 parameters: %s", mpg123_plain_strerror(result));
-		safe_exit(77);
-	}
-
-	/* get default values */
-	mpg123_getpar(mp, MPG123_DOWN_SAMPLE, &parr, NULL);
-	param.down_sample = (int) parr;
-	mpg123_getpar(mp, MPG123_RVA, &param.rva, NULL);
-	mpg123_getpar(mp, MPG123_DOWNSPEED, &param.halfspeed, NULL);
-	mpg123_getpar(mp, MPG123_UPSPEED, &param.doublespeed, NULL);
-#ifdef FLOATOUT
-	mpg123_getpar(mp, MPG123_OUTSCALE, NULL, &param.outscale);
-#else
-	mpg123_getpar(mp, MPG123_OUTSCALE, &param.outscale, NULL);
-#endif
-	mpg123_getpar(mp, MPG123_FLAGS, &parr, NULL);
-	param.flags = (int) parr;
-	bufferblock = mpg123_safe_buffer();
+#endif	
+	int init;
+	#ifdef GAPLESS
+	int pre_init;
+	#endif
+	int j;
 
 #ifdef OS2
         _wildcard(&argc,&argv);
 #endif
 
+	if(sizeof(short) != 2) {
+		fprintf(stderr,"Ouch SHORT has size of %d bytes (required: '2')\n",(int)sizeof(short));
+		safe_exit(1);
+	}
+	if(sizeof(long) < 4) {
+		fprintf(stderr,"Ouch LONG has size of %d bytes (required: at least 4)\n",(int)sizeof(long));
+	}
+
 	(prgName = strrchr(argv[0], '/')) ? prgName++ : (prgName = argv[0]);
+
+	audio_info_struct_init(&ai);
 
 	while ((result = getlopt(argc, argv, opts)))
 	switch (result) {
@@ -628,91 +760,72 @@ int main(int argc, char *argv[])
 			usage(1);
 	}
 
+	#ifdef OPT_MULTI
 	if(param.list_cpu)
 	{
-		char **all_dec = mpg123_decoders();
-		printf("Builtin decoders:");
-		while(*all_dec != NULL){ printf(" %s", *all_dec); ++all_dec; }
-		printf("\n");
+		list_cpu_opt();
 		safe_exit(0);
 	}
-	if(param.test_cpu)
+	if (param.test_cpu)
 	{
-		char **all_dec = mpg123_supported_decoders();
-		printf("Supported decoders:");
-		while(*all_dec != NULL){ printf(" %s", *all_dec); ++all_dec; }
-		printf("\n");
+		test_cpu_flags();
 		safe_exit(0);
 	}
+	if(!set_cpu_opt()) safe_exit(1);
+	#else
+	#ifdef OPT_3DNOW
+	if (param.test_cpu) {
+		struct cpuflags cf;
+		getcpuflags(&cf);
+		fprintf(stderr,"CPUFLAGS = %08x\n",cf.ext);
+		if ((cf.ext & 0x00800000) == 0x00800000) {
+			fprintf(stderr,"MMX instructions are supported.\n");
+		}
+		if ((cf.ext & 0x80000000) == 0x80000000) {
+			fprintf(stderr,"3DNow! instructions are supported.\n");
+		}
+		safe_exit(0);
+	}
+	#endif
+	#endif
+	#ifdef OPT_MPLAYER
+	mpl_dct64 = opt_mpl_dct64;
+	#endif
 
-	if (loptind >= argc && !param.listname && !param.remote) usage(1);
+	if (loptind >= argc && !param.listname && !param.remote)
+		usage(1);
 
 #if !defined(WIN32) && !defined(GENERIC)
-	if (param.remote)
-	{
-		param.verbose = 0;
+	if (param.remote) {
+		param.verbose = 0;        
 		param.quiet = 1;
-		param.flags |= MPG123_QUIET;
 	}
 #endif
 
-	/* Set the frame parameters from command line options */
-	if(param.quiet) param.flags |= MPG123_QUIET;
-#ifdef OPT_3DNOW
-	if(dnow != 0) param.cpu = (dnow == SET_3DNOW) ? "3dnow" : "i586";
-#endif
-	if(param.cpu != NULL && (!strcmp(param.cpu, "auto") || !strcmp(param.cpu, ""))) param.cpu = NULL;
-	if(!(  MPG123_OK == (result = mpg123_par(mp, MPG123_VERBOSE, param.verbose, 0))
-	    && MPG123_OK == (result = mpg123_par(mp, MPG123_FLAGS, param.flags, 0))
-	    && MPG123_OK == (result = mpg123_par(mp, MPG123_DOWN_SAMPLE, param.down_sample, 0))
-	    && MPG123_OK == (result = mpg123_par(mp, MPG123_RVA, param.rva, 0))
-	    && MPG123_OK == (result = mpg123_par(mp, MPG123_FORCE_RATE, param.force_rate, 0))
-	    && MPG123_OK == (result = mpg123_par(mp, MPG123_DOWNSPEED, param.halfspeed, 0))
-	    && MPG123_OK == (result = mpg123_par(mp, MPG123_UPSPEED, param.doublespeed, 0))
-	    && MPG123_OK == (result = mpg123_par(mp, MPG123_ICY_INTERVAL, 0, 0))
-#ifndef WIN32
-	    && MPG123_OK == (result = mpg123_par(mp, MPG123_TIMEOUT, param.timeout, 0))
-#endif
-#ifdef FLOATOUT
-	    && MPG123_OK == (result = mpg123_par(mp, MPG123_OUTSCALE, 0, param.outscale))
-#else
-	    && MPG123_OK == (result = mpg123_par(mp, MPG123_OUTSCALE, param.outscale, 0))
-#endif
-			))
-	{
-		error1("Cannot set library parameters: %s", mpg123_plain_strerror(result));
-		safe_exit(45);
-	}
-	if (!(param.listentry < 0) && !param.quiet) print_title(stderr); /* do not pollute stdout! */
+	if (!(param.listentry < 0) && !param.quiet)
+		print_title(stderr); /* do not pollute stdout! */
 
-	if(param.force_rate && param.down_sample)
-	{
-		error("Down sampling and fixed rate options not allowed together!");
+	if(param.force_mono) {
+		fr.single = param.force_mono-1;
+	}
+
+	if(param.force_rate && param.down_sample) {
+		fprintf(stderr,"Down sampling and fixed rate options not allowed together!\n");
 		safe_exit(1);
 	}
 
-	/* Now actually get an mpg123_handle. */
-	mh = mpg123_parnew(mp, param.cpu, &result);
-	if(mh == NULL)
-	{
-		error1("Crap! Cannot get a mpg123 handle: %s", mpg123_plain_strerror(result));
-		safe_exit(77);
+	audio_capabilities(&ai);
+	/* equalizer initialization regardless of equalfile */
+	for(j=0; j<32; j++) {
+		equalizer[0][j] = equalizer[1][j] = 1.0;
+		equalizer_sum[0][j] = equalizer_sum[1][j] = 0.0;
 	}
-	mpg123_delete_pars(mp); /* Don't need the parameters anymore ,they're in the handle now. */
-
-	/* Open audio output module */
-	ao = open_output_module( param.output_module );
-	if (!ao) {
-		error("Failed to open audio output module.");
-		safe_exit(1);
-	}
-
-	audio_capabilities(ao, mh); /* Query audio output parameters, store in mpg123 handle. */
-
-	if(equalfile != NULL)
-	{ /* tst; ThOr: not TRUE or FALSE: allocated or not... */
+	if(equalfile != NULL) { /* tst; ThOr: not TRUE or FALSE: allocated or not... */
 		FILE *fe;
 		int i;
+
+		equalizer_cnt = 0;
+
 		fe = fopen(equalfile,"r");
 		if(fe) {
 			char line[256];
@@ -723,10 +836,11 @@ int main(int argc, char *argv[])
 				if(line[0]=='#')
 					continue;
 				sscanf(line,"%f %f",&e0,&e1);
-				mpg123_eq(mh, MPG123_LEFT,  i, e0);
-				mpg123_eq(mh, MPG123_RIGHT, i, e1);
+				equalizer[0][i] = e0;
+				equalizer[1][i] = e1;	
 			}
 			fclose(fe);
+			have_eq_settings = TRUE;			
 		}
 		else
 			fprintf(stderr,"Can't open equalizer file '%s'\n",equalfile);
@@ -750,7 +864,13 @@ int main(int argc, char *argv[])
 	}
 #endif
 
+	set_synth_functions(&fr);
+
 	if(!param.remote) prepare_playlist(argc, argv);
+
+	opt_make_decode_tables(outscale);
+	init_layer2(); /* inits also shared tables with layer1 */
+	init_layer3(fr.down_sample);
 
 #if !defined(WIN32) && !defined(GENERIC)
 	/* This ctrl+c for title skip only when not in some control mode */
@@ -766,37 +886,30 @@ int main(int argc, char *argv[])
 
 	if(param.remote) {
 		int ret;
-		ret = control_generic(mh);
+		init_id3();
+		init_icy();
+		ret = control_generic(&fr);
+		clear_icy();
+		exit_id3();
 		safe_exit(ret);
 	}
 
-	while ((fname = get_next_file()))
-	{
+	init_icy();
+	init_id3(); /* prepare id3 memory */
+	while ((fname = get_next_file())) {
 		char *dirname, *filename;
-		frames_left = param.frame_number;
-		debug1("Going to play %s", strcmp(fname, "-") ? fname : "standard input");
+		long leftFrames,newFrame;
 
-		if(!open_track(fname)) continue;
-
-		if(!param.quiet) fprintf(stderr, "\n");
-		if(param.index)
-		{
-			if(param.verbose) fprintf(stderr, "indexing...\r");
-			mpg123_scan(mh);
-		}
-		framenum = mpg123_seek_frame(mh, param.start_frame, SEEK_SET);
-		if(framenum < 0)
-		{
-			error1("Initial seek failed: %s", mpg123_strerror(mh));
-			mpg123_close(mh);
-			continue;
-		}
-
+		if(!*fname || !strcmp(fname, "-"))
+			fname = NULL;
+               if (open_stream(fname,-1) < 0)
+                       continue;
+      
 		if (!param.quiet) {
 			if (split_dir_file(fname ? fname : "standard input",
 				&dirname, &filename))
-				fprintf(stderr, "Directory: %s\n", dirname);
-			fprintf(stderr, "Playing MPEG stream %lu of %lu: %s ...\n", (unsigned long)pl.pos, (unsigned long)pl.fill, filename);
+				fprintf(stderr, "\nDirectory: %s", dirname);
+			fprintf(stderr, "\nPlaying MPEG stream %lu of %lu: %s ...\n", (unsigned long)pl.pos, (unsigned long)pl.fill, filename);
 
 #if !defined(GENERIC)
 {
@@ -818,84 +931,111 @@ int main(int argc, char *argv[])
 #endif
 			gettimeofday (&start_time, NULL);
 #endif
+		read_frame_init(&fr);
 
+		init = 1;
+		#ifdef GAPLESS
+		pre_init = 1;
+		#endif
+		newFrame = startFrame;
+		
 #ifdef HAVE_TERMIOS
 		debug1("param.term_ctrl: %i", param.term_ctrl);
 		if(param.term_ctrl)
 			term_init();
 #endif
-#ifdef HAVE_TERMIOS /* I am not sure if this is right here anymore!... what with intflag? */
+		leftFrames = numframes;
+		/* read_frame is counting the frames! */
+		for(;read_frame(&fr) && leftFrames && !intflag;) {
+#ifdef HAVE_TERMIOS			
 tc_hack:
 #endif
-		while(!intflag)
-		{
-			int meta;
-			if(param.frame_number > -1)
-			{
-				debug1("frames left: %li", (long) frames_left);
-				if(!frames_left) break;
-			}
-			if(!play_frame()) break;
-			if(!param.quiet)
-			{
-				meta = mpg123_meta_check(mh);
-				if(meta & (MPG123_NEW_ID3|MPG123_NEW_ICY))
+			if(fr.num < startFrame || (param.doublespeed && (fr.num % param.doublespeed))) {
+				if(fr.lay == 3)
 				{
-					char *icy;
-					if(meta & MPG123_NEW_ID3) print_id3_tag(mh, param.long_id3, stderr);
-					if(meta & MPG123_NEW_ICY && MPG123_OK == mpg123_icy(mh, &icy))
-					fprintf(stderr, "\nICY-META: %s\n", icy);
+					set_pointer(512);
+					#ifdef GAPLESS
+					if(param.gapless)
+					{
+						if(pre_init)
+						{
+							prepare_audioinfo(&fr, &pre_ai);
+							pre_init = 0;
+						}
+						/* keep track... */
+						layer3_gapless_set_position(fr.num, &fr, &pre_ai);
+					}
+					#endif
 				}
+				continue;
 			}
-			if(!fresh && param.verbose)
+			if(leftFrames > 0)
+			  leftFrames--;
+			if(!play_frame(init,&fr))
 			{
+				error("frame playback failed, skipping rest of track");
+				break;
+			}
+			init = 0;
+
+			if(param.verbose) {
 #ifndef NOXFERMEM
-				if (param.verbose > 1 || !(framenum & 0x7))
-					print_stat(mh,0,xfermem_get_usedspace(buffermem)); 
+				if (param.verbose > 1 || !(fr.num & 0x7))
+					print_stat(&fr,fr.num,xfermem_get_usedspace(buffermem),&ai); 
 				if(param.verbose > 2 && param.usebuffer)
 					fprintf(stderr,"[%08x %08x]",buffermem->readindex,buffermem->freeindex);
 #else
-				if(param.verbose > 1 || !(framenum & 0x7))	print_stat(mh,0,0);
+				if (param.verbose > 1 || !(fr.num & 0x7))
+					print_stat(&fr,fr.num,0,&ai);
 #endif
 			}
 #ifdef HAVE_TERMIOS
-			if(!param.term_ctrl) continue;
-			else
-			{
-				off_t offset;
-				if((offset=term_control(mh)))
-				{
-					if((offset = mpg123_seek_frame(mh, offset, SEEK_CUR)) >= 0)
-					{
-						if(param.usebuffer)	buffer_resync();
-						debug1("seeked to %li", offset);
-					} else error1("seek failed: %s!", mpg123_strerror(mh));
+			if(!param.term_ctrl) {
+				continue;
+			} else {
+				long offset;
+				if((offset=term_control(&fr,&ai))) {
+					if(!rd->back_frame(rd, &fr, -offset)) {
+						debug1("seeked to %lu", fr.num);
+						#ifdef GAPLESS
+						if(param.gapless && (fr.lay == 3))
+						layer3_gapless_set_position(fr.num, &fr, &ai);
+						#endif
+					} else { error("seek failed!"); }
 				}
 			}
 #endif
+
 		}
+		#ifdef GAPLESS
+		/* make sure that the correct padding is skipped after track ended */
+		if(param.gapless) audio_flush(param.outmode, &ai);
+		#endif
 
 #ifndef NOXFERMEM
 	if(param.usebuffer) {
 		int s;
-		while ((s = xfermem_get_usedspace(buffermem)))
-		{
+		while ((s = xfermem_get_usedspace(buffermem))) {
 			struct timeval wait170 = {0, 170000};
+
 			buffer_ignore_lowmem();
-			if(param.verbose) print_stat(mh,0,s);
+			
+			if(param.verbose)
+				print_stat(&fr,fr.num,s,&ai);
 #ifdef HAVE_TERMIOS
-			if(param.term_ctrl)
-			{
-				off_t offset;
-				if((offset=term_control(mh)))
-				{
-					if((offset = mpg123_seek_frame(mh, offset, SEEK_CUR)) >= 0)
-					/*	&& read_frame(&fr) == 1 */
+			if(param.term_ctrl) {
+				long offset;
+				if((offset=term_control(&fr,&ai))) {
+					if((!rd->back_frame(rd, &fr, -offset)) 
+						&& read_frame(&fr))
 					{
-						if(param.usebuffer)	buffer_resync();
-						debug1("seeked to %li", offset);
+						debug1("seeked to %lu", fr.num);
+						#ifdef GAPLESS
+						if(param.gapless && (fr.lay == 3))
+						layer3_gapless_set_position(fr.num, &fr, &ai);
+						#endif
 						goto tc_hack;	/* Doh! Gag me with a spoon! */
-					} else error1("seek failed: %s!", mpg123_strerror(mh));
+					} else { error("seek failed!"); }
 				}
 			}
 #endif
@@ -903,22 +1043,35 @@ tc_hack:
 		}
 	}
 #endif
-	if(param.verbose) print_stat(mh,0,xfermem_get_usedspace(buffermem)); 
+	if(param.verbose)
+		print_stat(&fr,fr.num,xfermem_get_usedspace(buffermem),&ai); 
 #ifdef HAVE_TERMIOS
-	if(param.term_ctrl) term_restore();
+	if(param.term_ctrl)
+		term_restore();
 #endif
 
-	if(!param.quiet)
-	{
-		double secs;
-		mpg123_position(mh, 0, 0, NULL, NULL, &secs, NULL);
-		fprintf(stderr,"\n[%d:%02d] Decoding of %s finished.\n", (int)(secs / 60), ((int)secs) % 60, filename);
+	if (!param.quiet) {
+		/* 
+		 * This formula seems to work at least for
+		 * MPEG 1.0/2.0 layer 3 streams.
+		 */
+		int secs = get_songlen(&fr,fr.num);
+		fprintf(stderr,"\n[%d:%02d] Decoding of %s finished.\n", secs / 60,
+			secs % 60, filename);
 	}
 
-	mpg123_close(mh);
+	rd->close(rd);
+#if 0
+	if(param.remote)
+		fprintf(stderr,"@R MPG123\n");        
+	if (remflag) {
+		intflag = FALSE;
+		remflag = FALSE;
+	}
+#endif
+	
+      if (intflag) {
 
-	if (intflag)
-	{
 /* 
  * When HAVE_TERMIOS is defined, there is 'q' to terminate a list of songs, so
  * no pressing need to keep up this first second SIGINT hack that was too
@@ -947,6 +1100,8 @@ tc_hack:
 #endif
       }
     } /* end of loop over input files */
+    clear_icy();
+    exit_id3(); /* free id3 memory */
 #ifndef NOXFERMEM
     if (param.usebuffer) {
       buffer_end();
@@ -954,17 +1109,30 @@ tc_hack:
       waitpid (buffer_pid, NULL, 0);
       xfermem_done (buffermem);
     }
+    else {
 #endif
-	/* Close the output */
-	close_output(param.outmode, ao);
-    
-    /* Close the audio output module */
-    close_output_module( ao );
+      audio_flush(param.outmode, &ai);
+      free (pcm_sample);
+#ifndef NOXFERMEM
+    }
+#endif
 
-	/* Free up memory used by playlist */    
-	if(!param.remote) free_playlist();
-	safe_exit(0);
-	return 0;
+    switch(param.outmode) {
+      case DECODE_AUDIO:
+        audio_close(&ai);
+        break;
+      case DECODE_WAV:
+        wav_close();
+        break;
+      case DECODE_AU:
+        au_close();
+        break;
+      case DECODE_CDR:
+        cdr_close();
+        break;
+    }
+   	if(!param.remote) free_playlist();
+    return 0;
 }
 
 static void print_title(FILE *o)
@@ -990,7 +1158,7 @@ static void usage(int err)  /* print syntax & exit */
 	fprintf(o,"   -w <filename> write Output as WAV file\n");
 	fprintf(o,"   -k n  skip first n frames [0]        -n n  decode only n frames [all]\n");
 	fprintf(o,"   -c    check range violations         -y    DISABLE resync on errors\n");
-	fprintf(o,"   -b n  output buffer: n Kbytes [0]    -f n  change scalefactor [%g]\n", (double)param.outscale);
+	fprintf(o,"   -b n  output buffer: n Kbytes [0]    -f n  change scalefactor [%g]\n", (double)outscale);
 	fprintf(o,"   -r n  set/force samplerate [auto]    -g n  set audio hardware output gain\n");
 	fprintf(o,"   -os,-ol,-oh  output to built-in speaker,line-out connector,headphones\n");
 	#ifdef NAS
@@ -1051,11 +1219,8 @@ static void long_usage(int err)
 #endif
 	fprintf(o," -z     --shuffle          shuffle song-list before playing\n");
 	fprintf(o," -Z     --random           full random play\n");
-	fprintf(o,"        --no-icy-meta      Do not accept ICY meta data\n");
-	fprintf(o," -i     --index            index / scan through the track before playback\n");
+
 	fprintf(o,"\noutput/processing options\n\n");
-	fprintf(o," -o <o> --output <o>       select audio output module\n");
-	fprintf(o,"        --list-modules     list the available modules\n");
 	fprintf(o," -a <d> --audiodevice <d>  select audio device\n");
 	fprintf(o," -s     --stdout           write raw audio to stdout (host native format)\n");
 	fprintf(o," -S     --STDOUT           play AND output stream (not implemented yet)\n");
@@ -1074,7 +1239,7 @@ static void long_usage(int err)
 	fprintf(o,"        --no-3dnow         force use of floating-pointer routine (obsoleted by --cpu)\n");
 	#endif
 	fprintf(o," -g     --gain             set audio hardware output gain\n");
-	fprintf(o," -f <n> --scale <n>        scale output samples (soft gain, default=%g)\n", (double)param.outscale);
+	fprintf(o," -f <n> --scale <n>        scale output samples (soft gain, default=%g)\n", (double)outscale);
 	fprintf(o,"        --rva-mix,\n");
 	fprintf(o,"        --rva-radio        use RVA2/ReplayGain values for mix/radio mode\n");
 	fprintf(o,"        --rva-album,\n");
@@ -1087,8 +1252,8 @@ static void long_usage(int err)
 	fprintf(o," -2     --2to1             2:1 downsampling\n");
 	fprintf(o," -4     --4to1             4:1 downsampling\n");
 	fprintf(o,"        --8bit             force 8 bit output\n");
-	fprintf(o," -d n   --doublespeed n    play only every nth frame\n");
-	fprintf(o," -h n   --halfspeed   n    play every frame n times\n");
+	fprintf(o," -d     --doublespeed      play only every second frame\n");
+	fprintf(o," -h     --halfspeed        play every frame twice\n");
 	fprintf(o,"        --equalizer        exp.: scales freq. bands acrd. to 'equalizer.dat'\n");
 	#ifdef GAPLESS
 	fprintf(o,"        --gapless          remove padding/junk added by encoder/decoder\n");

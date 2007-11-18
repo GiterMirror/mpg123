@@ -6,354 +6,276 @@
 	initially written by Michael Hipp
 */
 
-#include "mpg123app.h"
-#include "common.h"
+#include "mpg123.h"
 
-#ifdef HAVE_SYS_WAIT_H
-#include <sys/wait.h>
-#endif
-
-
-/* Open an audio output module */
-audio_output_t* open_output_module( const char* name )
+void audio_info_struct_init(struct audio_info_struct *ai)
 {
-	mpg123_module_t *module = NULL;
-	audio_output_t *ao = NULL;
-	int result = 0;
-
-	/* Open the module */
-	module = open_module( "output", name );
-	if (module == NULL) return NULL;
-
-	/* Check module supports output */
-	if (module->init_output == NULL) {
-		error1("Module '%s' does not support audio output.", name);
-		close_module( module );
-		return NULL;
-	}
-	
-	/* Allocation memory for audio output type */
-	ao = alloc_audio_output();
-	if (ao==NULL) {
-		error( "Failed to allocate audio output structure." );
-		return NULL;
-	}
-	
-	/* Call the init function */
-	ao->device = param.output_device;
-	ao->flags  = param.output_flags;
-	result = module->init_output(ao);
-	if (result) {
-		error1( "Module's init function failed: %d", result );
-		close_module( module );
-		return NULL;
-	}
-	
-	/* Store the pointer to the module (so we can close it later) */
-	ao->module = module;
-
-	return ao;
+  ai->fn = -1;
+  ai->rate = -1;
+  ai->gain = -1;
+  ai->output = -1;
+  ai->handle = NULL;
+  ai->device = NULL;
+  ai->channels = -1;
+  ai->format = -1;
 }
 
 
-
-/* Close the audio output and close the module */
-void close_output_module( audio_output_t* ao ) 
+void audio_info_struct_dump(struct audio_info_struct *ai)
 {
-	if (!ao) return;
-	
-	debug("closing output module");
-
-	/* Close the audio output */
-	if (ao->close) ao->close( ao );
-
-	/* Deinitialise the audio output */
-	if (ao->deinit) ao->deinit( ao );
-	
-	/* Unload the module */
-	if (ao->module) close_module( ao->module );
-
-	/* Free up memory */
-	free( ao );
+	fprintf(stderr, "ai->fn=%d\n", ai->fn);
+	fprintf(stderr, "ai->handle=%p\n", ai->handle);
+	fprintf(stderr, "ai->rate=%ld\n", ai->rate);
+	fprintf(stderr, "ai->gain=%ld\n", ai->gain);
+	fprintf(stderr, "ai->output=%d\n", ai->output);
+	fprintf(stderr, "ai->device='%s'\n", ai->device);
+	fprintf(stderr, "ai->channels=%d\n", ai->channels);
+	fprintf(stderr, "ai->format=%d\n", ai->format);
 }
-
-
-
-/* allocate and initialise memory */
-audio_output_t* alloc_audio_output()
-{
-	audio_output_t* ao = malloc( sizeof( audio_output_t ) );
-	if (ao==NULL) error( "Failed to allocate memory for audio_output_t." );
-
-	/* Initialise variables */
-	ao->fn = -1;
-	ao->rate = -1;
-	ao->gain = -1;
-	ao->userptr = NULL;
-	ao->device = NULL;
-	ao->channels = -1;
-	ao->format = -1;
-	ao->flags = 0;
-	
-	/*ao->module = NULL;*/
-
-	/* Set the callbacks to NULL */
-	ao->open = NULL;
-	ao->get_formats = NULL;
-	ao->write = NULL;
-	ao->flush = NULL;
-	ao->close = NULL;
-	ao->deinit = NULL;
-	
-	return ao;
-}
-
-/*
-static void audio_output_dump(audio_output_t *ao)
-{
-	fprintf(stderr, "ao->fn=%d\n", ao->fn);
-	fprintf(stderr, "ao->userptr=%p\n", ao->userptr);
-	fprintf(stderr, "ao->rate=%ld\n", ao->rate);
-	fprintf(stderr, "ao->gain=%ld\n", ao->gain);
-	fprintf(stderr, "ao->device='%s'\n", ao->device);
-	fprintf(stderr, "ao->channels=%d\n", ao->channels);
-	fprintf(stderr, "ao->format=%d\n", ao->format);
-}
-*/
 
 
 #define NUM_CHANNELS 2
 #define NUM_ENCODINGS 6
 #define NUM_RATES 10
 
-/* Safer as function... */
-const char* audio_encoding_name(const int encoding, const int longer)
-{
-	const char *name = longer ? "unknown" : "???";
-	switch(encoding)
-	{
-		case MPG123_ENC_SIGNED_16:   name = longer ? "signed 16 bit"   : "s16 ";  break;
-		case MPG123_ENC_UNSIGNED_16: name = longer ? "unsigned 16 bit" : "u16 ";  break;
-		case MPG123_ENC_UNSIGNED_8:  name = longer ? "unsigned 8 bit"  : "u8  ";   break;
-		case MPG123_ENC_SIGNED_8:    name = longer ? "signed 8 bit"    : "s8  ";   break;
-		case MPG123_ENC_ULAW_8:      name = longer ? "mu-law (8 bit)"  : "ulaw "; break;
-		case MPG123_ENC_ALAW_8:      name = longer ? "a-law (8 bit)"   : "alaw "; break;
-	}
-	return name;
-}
+struct audio_name audio_val2name[NUM_ENCODINGS+1] = {
+ { AUDIO_FORMAT_SIGNED_16  , "signed 16 bit" , "s16 " } ,
+ { AUDIO_FORMAT_UNSIGNED_16, "unsigned 16 bit" , "u16 " } ,  
+ { AUDIO_FORMAT_UNSIGNED_8 , "unsigned 8 bit" , "u8  " } ,
+ { AUDIO_FORMAT_SIGNED_8   , "signed 8 bit" , "s8  " } ,
+ { AUDIO_FORMAT_ULAW_8     , "mu-law (8 bit)" , "ulaw " } ,
+ { AUDIO_FORMAT_ALAW_8     , "a-law (8 bit)" , "alaw " } ,
+ { -1 , NULL }
+};
 
-static void capline(mpg123_handle *mh, int ratei)
-{
-	int enci;
-	fprintf(stderr," %5ld  |", ratei >= 0 ? mpg123_rates[ratei] : param.force_rate);
-	for(enci=0; enci<MPG123_ENCODINGS; ++enci)
-	{
-		switch(mpg123_format_support(mh, ratei, enci))
-		{
-			case MPG123_MONO:               fprintf(stderr, "   M   |"); break;
-			case MPG123_STEREO:             fprintf(stderr, "   S   |"); break;
-			case MPG123_MONO|MPG123_STEREO: fprintf(stderr, "  M/S  |"); break;
-			default:                        fprintf(stderr, "       |");
-		}
-	}
-	fprintf(stderr, "\n");
-}
+#if 0
+static char *channel_name[NUM_CHANNELS] = 
+ { "mono" , "stereo" };
+#endif
 
-void print_capabilities(audio_output_t *ao, mpg123_handle *mh)
+static int channels[NUM_CHANNELS] = { 1 , 2 };
+static int rates[NUM_RATES] = { 
+	 8000, 11025, 12000, 
+	16000, 22050, 24000,
+	32000, 44100, 48000,
+	8000	/* 8000 = dummy for user forced */
+
+};
+static int encodings[NUM_ENCODINGS] = {
+ AUDIO_FORMAT_SIGNED_16, 
+ AUDIO_FORMAT_UNSIGNED_16,
+ AUDIO_FORMAT_UNSIGNED_8,
+ AUDIO_FORMAT_SIGNED_8,
+ AUDIO_FORMAT_ULAW_8,
+ AUDIO_FORMAT_ALAW_8
+};
+
+static char capabilities[NUM_CHANNELS][NUM_ENCODINGS][NUM_RATES];
+
+void print_capabilities(struct audio_info_struct *ai)
 {
-	int r,e;
-	fprintf(stderr,"\nAudio driver: %s\nAudio device: %s\nAudio capabilities:\n(matrix of [S]tereo or [M]ono support for sample format and rate in Hz)\n        |",
-	        ao->module->name, ao->device != NULL ? ao->device : "<none>");
-	for(e=0;e<MPG123_ENCODINGS;e++) fprintf(stderr," %5s |",audio_encoding_name(mpg123_encodings[e], 0));
+	int j,k,k1=NUM_RATES-1;
+	if(param.force_rate) {
+		rates[NUM_RATES-1] = param.force_rate;
+		k1 = NUM_RATES;
+	}
+	fprintf(stderr,"\nAudio device: %s\nAudio capabilities:\n(matrix of [S]tereo or [M]ono support for sample format and rate in Hz)\n        |", ai->device != NULL ? ai->device : "<none>");
+	for(j=0;j<NUM_ENCODINGS;j++) {
+		fprintf(stderr," %5s |",audio_val2name[j].sname);
+	}
 	fprintf(stderr,"\n --------------------------------------------------------\n");
-	for(r=0; r<MPG123_RATES; ++r) capline(mh, r);
-
-	if(param.force_rate) capline(mh, -1);
-
+	for(k=0;k<k1;k++) {
+		fprintf(stderr," %5d  |",rates[k]);
+		for(j=0;j<NUM_ENCODINGS;j++) {
+			if(capabilities[0][j][k]) {
+				if(capabilities[1][j][k])
+					fprintf(stderr,"  M/S  |");
+				else
+					fprintf(stderr,"   M   |");
+			}
+			else if(capabilities[1][j][k])
+				fprintf(stderr,"   S   |");
+			else
+				fprintf(stderr,"       |");
+		}
+		fprintf(stderr,"\n");
+	}
 	fprintf(stderr,"\n");
 }
 
-void audio_capabilities(audio_output_t *ao, mpg123_handle *mh)
+
+void audio_capabilities(struct audio_info_struct *ai)
 {
 	int fmts;
-	int ri;
-	audio_output_t ao1 = *ao; /* a copy */
+	int i,j,k,k1=NUM_RATES-1;
+	struct audio_info_struct ai1 = *ai;
 
-	if(param.outmode != DECODE_AUDIO)
-	{ /* File/stdout writers can take anything. */
-		mpg123_format_all(mh);
+        if (param.outmode != DECODE_AUDIO) {
+		memset(capabilities,1,sizeof(capabilities));
 		return;
 	}
 
-	mpg123_format_none(mh); /* Start with nothing. */
+	memset(capabilities,0,sizeof(capabilities));
+	if(param.force_rate) {
+		rates[NUM_RATES-1] = param.force_rate;
+		k1 = NUM_RATES;
+	}
 
-	/* If audio_open fails, the device is just not capable of anything... */
-	if(ao1.open(&ao1) < 0) error("failed to open audio device");
+	/* if audio_open fails, the device is just not capable of anything... */
+	if(audio_open(&ai1) < 0) {
+		perror("audio");
+	}
 	else
 	{
-		for(ao1.channels=1; ao1.channels<=2; ao1.channels++)
-		for(ri=-1;ri<MPG123_RATES;ri++)
-		{
-			ao1.rate = ri >= 0 ? mpg123_rates[ri] : param.force_rate;
-			fmts = ao1.get_formats(&ao1);
-			if(fmts < 0) continue;
-			else mpg123_format(mh, ao1.rate, ao1.channels, fmts);
-		}
-		ao1.close(&ao1);
-	}
-
-	if(param.verbose > 1) print_capabilities(ao, mh);
-}
-
-#if !defined(WIN32) && !defined(GENERIC)
-#ifndef NOXFERMEM
-static void catch_child(void)
-{
-  while (waitpid(-1, NULL, WNOHANG) > 0);
-}
-#endif
-#endif
-
-
-/* FIXME: Old output initialization code that needs updating */
-
-int init_output(audio_output_t *ao, mpg123_handle *mh)
-{
-	static int init_done = FALSE;
-	
-	if (init_done) return 1;
-	init_done = TRUE;
-  
-#ifndef NOXFERMEM
-	/*
-	* Only DECODE_AUDIO and DECODE_FILE are sanely handled by the
-	* buffer process. For now, we just ignore the request
-	* to buffer the output. [dk]
-	*/
-	if (param.usebuffer && (param.outmode != DECODE_AUDIO) &&
-	(param.outmode != DECODE_FILE)) {
-	fprintf(stderr, "Sorry, won't buffer output unless writing plain audio.\n");
-	param.usebuffer = 0;
-	} 
-
-	if (param.usebuffer)
-	{
-		unsigned int bufferbytes;
-		sigset_t newsigset, oldsigset;
-		bufferbytes = (param.usebuffer * 1024);
-		if (bufferbytes < bufferblock)
-		{
-			bufferbytes = 2*bufferblock;
-			if(!param.quiet) fprintf(stderr, "Note: raising buffer to minimal size %liKiB\n", (unsigned long) bufferbytes>>10);
-		}
-		bufferbytes -= bufferbytes % bufferblock;
-		/* No +1024 for NtoM rounding problems anymore! */
-		xfermem_init (&buffermem, bufferbytes ,0,0);
-		mpg123_replace_buffer(mh, (unsigned char *) buffermem->data, bufferblock);
-		sigemptyset (&newsigset);
-		sigaddset (&newsigset, SIGUSR1);
-		sigprocmask (SIG_BLOCK, &newsigset, &oldsigset);
-#if !defined(WIN32) && !defined(GENERIC)
-		catchsignal (SIGCHLD, catch_child);
-#endif
-		switch ((buffer_pid = fork()))
-		{
-			case -1: /* error */
-			error("cannot fork!");
-			return -1;
-			case 0: /* child */
-			/* oh, is that trouble here? well, buffer should actually be opened before loading tracks IMHO */
-			mpg123_close(mh); /* child doesn't need the input stream */
-			xfermem_init_reader (buffermem);
-			buffer_loop (ao, &oldsigset);
-			xfermem_done_reader (buffermem);
-			xfermem_done (buffermem);
-			exit(0);
-			default: /* parent */
-			xfermem_init_writer (buffermem);
-			param.outmode = DECODE_BUFFER;
-		}
-	}
-#endif
-	/* Open audio if not decoding to buffer */
-	switch(param.outmode) {
-		case DECODE_AUDIO:
-			if(ao->open(ao) < 0) {
-				error("failed to open audio device");
-				return 1;
+		for(i=0;i<NUM_CHANNELS;i++) {
+			for(j=0;j<NUM_RATES;j++) {
+				ai1.channels = channels[i];
+				ai1.rate = rates[j];
+				fmts = audio_get_formats(&ai1);
+				if(fmts < 0)
+					continue;
+				for(k=0;k<NUM_ENCODINGS;k++) {
+					if((fmts & encodings[k]) == encodings[k])
+						capabilities[i][k][j] = 1;
+				}
 			}
-		break;
-		case DECODE_WAV:
-			wav_open(ao,param.filename);
-		break;
-		case DECODE_AU:
-			au_open(ao,param.filename);
-		break;
-		case DECODE_CDR:
-			cdr_open(ao,param.filename);
-		break;
+		}
+		audio_close(&ai1);
 	}
 
+	if(param.verbose > 1) print_capabilities(ai);
+}
+
+static int rate2num(int r)
+{
+	int i;
+	for(i=0;i<NUM_RATES;i++) 
+		if(rates[i] == r)
+			return i;
+	return -1;
+}
+
+
+static int audio_fit_cap_helper(struct audio_info_struct *ai,int rn,int f0,int f2,int c)
+{
+	int i;
+
+        if(rn >= 0) {
+                for(i=f0;i<f2;i++) {
+                        if(capabilities[c][i][rn]) {
+                                ai->rate = rates[rn];
+                                ai->format = encodings[i];
+                                ai->channels = channels[c];
+				return 1;
+                        }
+                }
+        }
+	return 0;
+
+}
+
+/*
+ * c=num of channels of stream
+ * r=rate of stream
+ * return 0 on error
+ */
+int audio_fit_capabilities(struct audio_info_struct *ai,int c,int r)
+{
+	int rn;
+	int f0=0;
+	
+	if(param.force_8bit) f0 = 2; /* skip the 16bit encodings */
+
+	c--; /* stereo=1 ,mono=0 */
+
+	/* force stereo is stronger */
+	if(param.force_mono) c = 0;
+	if(param.force_stereo) c = 1;
+
+	if(param.force_rate) {
+		rates[NUM_RATES-1] = param.force_rate; /* To make STDOUT decoding work. */
+		rn = rate2num(param.force_rate);
+		/* 16bit encodings */
+		if(audio_fit_cap_helper(ai,rn,f0,2,c)) return 1;
+		/* 8bit encodings */
+		if(audio_fit_cap_helper(ai,rn,2,NUM_ENCODINGS,c)) return 1;
+
+		/* try again with different stereoness */
+		if(c == 1 && !param.force_stereo)	c = 0;
+		else if(c == 0 && !param.force_mono) c = 1;
+
+		/* 16bit encodings */
+		if(audio_fit_cap_helper(ai,rn,f0,2,c)) return 1;
+		/* 8bit encodings */
+		if(audio_fit_cap_helper(ai,rn,2,NUM_ENCODINGS,c)) return 1;
+
+		error3("Unable to set up output device! Constraints: %s%s%liHz.",
+		      (param.force_stereo ? "stereo, " :
+		       (param.force_mono ? "mono, " : "")),
+		      (param.force_8bit ? "8bit, " : ""),
+		      param.force_rate);
+		if(param.verbose <= 1) print_capabilities(ai);
+		return 0;
+	}
+
+	/* try different rates with 16bit */
+	rn = rate2num(r>>0);
+	if(audio_fit_cap_helper(ai,rn,f0,2,c))
+		return 1;
+	rn = rate2num(r>>1);
+	if(audio_fit_cap_helper(ai,rn,f0,2,c))
+		return 1;
+	rn = rate2num(r>>2);
+	if(audio_fit_cap_helper(ai,rn,f0,2,c))
+		return 1;
+
+	/* try different rates with 8bit */
+	rn = rate2num(r>>0);
+	if(audio_fit_cap_helper(ai,rn,2,NUM_ENCODINGS,c))
+		return 1;
+	rn = rate2num(r>>1);
+	if(audio_fit_cap_helper(ai,rn,2,NUM_ENCODINGS,c))
+		return 1;
+	rn = rate2num(r>>2);
+	if(audio_fit_cap_helper(ai,rn,2,NUM_ENCODINGS,c))
+		return 1;
+
+	/* try again with different stereoness */
+	if(c == 1 && !param.force_stereo)	c = 0;
+	else if(c == 0 && !param.force_mono) c = 1;
+
+	/* 16bit */
+	rn = rate2num(r>>0);
+	if(audio_fit_cap_helper(ai,rn,f0,2,c)) return 1;
+	rn = rate2num(r>>1);
+	if(audio_fit_cap_helper(ai,rn,f0,2,c)) return 1;
+	rn = rate2num(r>>2);
+	if(audio_fit_cap_helper(ai,rn,f0,2,c)) return 1;
+
+	/* 8bit */
+	rn = rate2num(r>>0);
+	if(audio_fit_cap_helper(ai,rn,2,NUM_ENCODINGS,c)) return 1;
+	rn = rate2num(r>>1);
+	if(audio_fit_cap_helper(ai,rn,2,NUM_ENCODINGS,c)) return 1;
+	rn = rate2num(r>>2);
+	if(audio_fit_cap_helper(ai,rn,2,NUM_ENCODINGS,c)) return 1;
+
+	error5("Unable to set up output device! Constraints: %s%s%i, %i or %iHz.",
+	      (param.force_stereo ? "stereo, " :
+	       (param.force_mono ? "mono, " : "")),
+	      (param.force_8bit ? "8bit, " : ""),
+	      r, r>>1, r>>2);
+	if(param.verbose <= 1) print_capabilities(ai);
 	return 0;
 }
 
-void flush_output(int outmode, audio_output_t *ao, unsigned char *bytes, size_t count)
+char *audio_encoding_name(int format)
 {
-	if(count)
-	{
-		switch(outmode)
-		{
-			case DECODE_FILE:
-				write (OutputDescriptor, bytes, count);
-			break;
-			case DECODE_AUDIO:
-				ao->write(ao, bytes, count);
-			break;
-			case DECODE_BUFFER:
-				error("The buffer doesn't work like that... I shouldn't ever be getting here.");
-				write (buffer_fd[1], bytes, count);
-			break;
-			case DECODE_WAV:
-			case DECODE_CDR:
-			case DECODE_AU:
-				wav_write(bytes, count);
-			break;
-		}
-		count = 0;
+	int i;
+
+	for(i=0;i<NUM_ENCODINGS;i++) {
+		if(audio_val2name[i].val == format)
+			return audio_val2name[i].name;
 	}
-}
-
-/* is this used? */
-void close_output(int outmode, audio_output_t *ao)
-{
-
-    switch(outmode) {
-      case DECODE_AUDIO:
-        ao->close(ao);
-        /* Module frees and closes its resources, but may not reset them. */
-        ao->userptr = NULL;
-        ao->fn = -1;
-        break;
-      case DECODE_WAV:
-        wav_close();
-        break;
-      case DECODE_AU:
-        au_close();
-        break;
-      case DECODE_CDR:
-        cdr_close();
-        break;
-    }
-
-}
-
-/* Also for WAV decoding? */
-int reset_output(audio_output_t *ao)
-{
-	if(param.outmode == DECODE_AUDIO)
-	{
-		close_output(param.outmode, ao);
-		return ao->open(ao);
-	}
-	else return 0;
+	return "Unknown";
 }
