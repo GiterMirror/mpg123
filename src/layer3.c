@@ -480,7 +480,7 @@ static int III_get_side_info(struct III_sideinfo *si,int stereo,
 
          /* region_count/start parameters are implicit in this case. */       
 
-         if( !lsf || (gr_info->block_type == 2) && !mpeg25) {
+         if( (!lsf || (gr_info->block_type == 2)) && !mpeg25) {
            gr_info->region1start = 36>>1;
            gr_info->region2start = 576>>1;
          }
