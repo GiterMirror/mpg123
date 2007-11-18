@@ -1,3 +1,9 @@
+0.69
+----
+
+- fix the last fix a bit
+- Reworked win32 audio output by ravenexp. 
+
 0.68
 ----
 
