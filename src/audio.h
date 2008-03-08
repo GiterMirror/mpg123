@@ -66,7 +66,6 @@ struct audio_format_name {
 	char *sname;
 };
 
-#define pitch_rate(rate)	(param.pitch == 0 ? (rate) : (long) ((param.pitch+1.0)*(rate)))
 
 /* ------ Declarations from "audio.c" ------ */
 

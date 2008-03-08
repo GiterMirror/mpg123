@@ -104,7 +104,6 @@ struct parameter param = {
 	,1 /* ICY */
 	,1024 /* resync_limit */
 	,0 /* smooth */
-	,0.0 /* pitch */
 };
 
 int utf8env = 0;
@@ -427,7 +426,6 @@ topt opts[] = {
 	{'i', "index", GLO_INT, 0, &param.index, 1},
 	{'D', "delay", GLO_ARG | GLO_INT, 0, &param.delay, 0},
 	{0, "resync-limit", GLO_ARG | GLO_LONG, 0, &param.resync_limit, 0},
-  {0, "pitch", GLO_ARG|GLO_DOUBLE, 0, &param.pitch, 0},
 	{0, 0, 0, 0, 0, 0}
 };
 
@@ -453,7 +451,7 @@ static void reset_audio(long rate, int channels, int format)
 		buffermem->freeindex = 0;
 		if (intflag)
 			return;
-		buffermem->rate     = pitch_rate(rate); 
+		buffermem->rate     = rate; 
 		buffermem->channels = channels; 
 		buffermem->format   = format;
 		buffer_reset();
@@ -466,7 +464,7 @@ static void reset_audio(long rate, int channels, int format)
 			error("Audio handle should not be NULL here!");
 			safe_exit(98);
 		}
-		ao->rate     = pitch_rate(rate); 
+		ao->rate     = rate; 
 		ao->channels = channels; 
 		ao->format   = format;
 		if(reset_output(ao) < 0)
@@ -601,7 +599,7 @@ void buffer_drain(void)
 		buffer_ignore_lowmem();
 		if(param.verbose) print_stat(mh,0,s);
 	#ifdef HAVE_TERMIOS
-		if(param.term_ctrl) term_control(mh, ao);
+		if(param.term_ctrl) term_control(mh);
 	#endif
 		select(0, NULL, NULL, NULL, &wait170);
 	}
@@ -954,7 +952,7 @@ int main(int argc, char *argv[])
 			}
 #ifdef HAVE_TERMIOS
 			if(!param.term_ctrl) continue;
-			else term_control(mh, ao);
+			else term_control(mh);
 #endif
 		}
 
@@ -1148,7 +1146,6 @@ static void long_usage(int err)
 	fprintf(o," -r     --rate             force a specific audio output rate\n");
 	fprintf(o," -2     --2to1             2:1 downsampling\n");
 	fprintf(o," -4     --4to1             4:1 downsampling\n");
-  fprintf(o,"        --pitch <value>    set hardware pitch (speedup/down, 0 is neutral; 0.05 is 5%%)\n");
 	fprintf(o,"        --8bit             force 8 bit output\n");
 	fprintf(o," -d n   --doublespeed n    play only every nth frame\n");
 	fprintf(o," -h n   --halfspeed   n    play every frame n times\n");
