@@ -1,7 +1,7 @@
 1.4.2
 ---
 
-- Fix a building problem with inclusion of certain headers; now builds under Cygwin again.
+- Fix build problems (for Cygwin, perhaps others, too).
 
 1.4.1
 ---
