@@ -1,7 +1,7 @@
 1.4.2
 ---
 
-- Fix build problems (for Cygwin, perhaps others, too).
+- Fix build problems (for Cygwin and Win32, perhaps others, too).
 
 1.4.1
 ---
