@@ -7,7 +7,6 @@
 	reworked by Thomas Orgis - it was the entry point for eventually becoming maintainer...
 */
 
-#include "mpg123app.h"
 #include <stdarg.h>
 #ifndef WIN32
 #include <sys/wait.h>
@@ -19,6 +18,7 @@
 #include <errno.h>
 #include <string.h>
 
+#include "mpg123app.h"
 #include "common.h"
 #include "buffer.h"
 #include "genre.h"

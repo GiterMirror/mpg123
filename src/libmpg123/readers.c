@@ -7,8 +7,6 @@
 	see COPYING and AUTHORS files in distribution or http://mpg123.org
 	initially written by Michael Hipp
 */
-
-#include "mpg123lib_intern.h"
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <errno.h>
@@ -27,6 +25,7 @@
 #include <unistd.h>
 #endif
 
+#include "mpg123lib_intern.h"
 #include "debug.h"
 
 static int default_init(mpg123_handle *fr);
