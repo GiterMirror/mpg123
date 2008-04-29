@@ -185,11 +185,9 @@ int mpg123_par(mpg123_pars *mp, enum mpg123_parms key, long val, double fval)
 		case MPG123_FLAGS:
 #ifndef GAPLESS
 			if(val & MPG123_GAPLESS) ret = MPG123_NO_GAPLESS;
+			else
 #endif
-#ifdef FLOATOUT
-			if(val & MPG123_FORCE_8BIT) ret = MPG123_NO_8BIT;
-#endif
-			if(ret == MPG123_OK) mp->flags = val;
+			mp->flags = val;
 			debug1("set flags to 0x%lx", (unsigned long) mp->flags);
 		break;
 		case MPG123_ADD_FLAGS:
@@ -576,7 +574,7 @@ int mpg123_decode(mpg123_handle *mh,unsigned char *inmemory, size_t inmemsize, u
 
 	while(ret == MPG123_OK)
 	{
-		debug4("decode loop, fill %i (%li vs. %li); to_decode: %i", (int)mh->buffer.fill, (long)mh->num, (long)mh->firstframe, mh->to_decode);
+		debug3("decode loop, fill %i (%li vs. %li)", (int)mh->buffer.fill, (long)mh->num, (long)mh->firstframe);
 		/* Decode a frame that has been read before.
 		   This only happens when buffer is empty! */
 		if(mh->to_decode)
@@ -603,7 +601,7 @@ int mpg123_decode(mpg123_handle *mh,unsigned char *inmemory, size_t inmemsize, u
 		{
 			/* get what is needed - or just what is there */
 			int a = mh->buffer.fill > (outmemsize - mdone) ? outmemsize - mdone : mh->buffer.fill;
-			debug4("buffer fill: %i; copying %i (%i - %li)", (int)mh->buffer.fill, a, (int)outmemsize, (long)mdone);
+			debug4("buffer fill: %i; copying %i (%i - %li)", (int)mh->buffer.fill, a, (int)outmemsize, (long)*done);
 			memcpy(outmemory, mh->buffer.p, a);
 			/* less data in frame buffer, less needed, output pointer increase, more data given... */
 			mh->buffer.fill -= a;
@@ -681,24 +679,10 @@ off_t mpg123_tell(mpg123_handle *mh)
 	if(mh == NULL) return MPG123_ERR;
 	if(track_need_init(mh)) return 0;
 	/* Now we have all the info at hand. */
-	debug5("tell: %li/%i first %li buffer %lu; frame_outs=%li", (long)mh->num, mh->to_decode, (long)mh->firstframe, (unsigned long)mh->buffer.fill, (long)frame_outs(mh, mh->num));
-
-	if((mh->num < mh->firstframe) || (mh->num == mh->firstframe && mh->to_decode))
-	{ /* We are at the beginning, expect output from firstframe on. */
-		off_t pos = frame_outs(mh, mh->firstframe);
-#ifdef GAPLESS
-		pos += mh->firstoff;
-#endif
-		return SAMPLE_ADJUST(pos);
-	}
-	else if(mh->to_decode)
-	{ /* We start fresh with this frame. Buffer should be empty, but we make sure to count it in.  */
-		return SAMPLE_ADJUST(frame_outs(mh, mh->num) - bytes_to_samples(mh, mh->buffer.fill));
-	}
-	else
-	{ /* We serve what we have in buffer and then the beginning of next frame... */
-		return SAMPLE_ADJUST(frame_outs(mh, mh->num+1) - bytes_to_samples(mh, mh->buffer.fill));
-	}
+	debug4("tell: %li/%i first %li buffer %lu", (long)mh->num, mh->to_decode, (long)mh->firstframe, (unsigned long)mh->buffer.fill);
+	if((mh->num < mh->firstframe) || (mh->num == mh->firstframe && mh->to_decode)) return SAMPLE_ADJUST(frame_tell_seek(mh));
+	else if(mh->to_decode) return SAMPLE_ADJUST(frame_outs(mh, mh->num) - mh->buffer.fill);
+	else return SAMPLE_ADJUST(frame_outs(mh, mh->num+1) - mh->buffer.fill);
 }
 
 off_t mpg123_tellframe(mpg123_handle *mh)
@@ -1007,8 +991,7 @@ static const char *mpg123_error[] =
 	"Bad parameter handle. (code 25)",
 	"Invalid parameter addresses for index retrieval. (code 26)",
 	"Lost track in the bytestream and did not attempt resync. (code 27)",
-	"Failed to find valid MPEG data within limit on resync. (code 28)",
-	"No 8bit encoding possible. (code 29)"
+	"Failed to find valid MPEG data within limit on resync. (code 28)"
 };
 
 const char* mpg123_plain_strerror(int errcode)
