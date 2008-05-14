@@ -26,13 +26,13 @@ static const int my_encodings[MPG123_ENCODINGS] =
 	MPG123_ENC_ALAW_8
 };
 
-void mpg123_rates(const long **list, size_t *number)
+void attribute_align_arg mpg123_rates(const long **list, size_t *number)
 {
 	if(list   != NULL) *list   = my_rates;
 	if(number != NULL) *number = sizeof(my_rates)/sizeof(long);
 }
 
-void mpg123_encodings(const int **list, size_t *number)
+void attribute_align_arg mpg123_encodings(const int **list, size_t *number)
 {
 	if(list   != NULL) *list   = my_encodings;
 	if(number != NULL) *number = sizeof(my_encodings)/sizeof(int);
@@ -165,7 +165,7 @@ end: /* Here is the _good_ end. */
 	}
 }
 
-int mpg123_format_none(mpg123_handle *mh)
+int attribute_align_arg mpg123_format_none(mpg123_handle *mh)
 {
 	int r;
 	if(mh == NULL) return MPG123_ERR;
@@ -176,7 +176,7 @@ int mpg123_format_none(mpg123_handle *mh)
 	return r;
 }
 
-int mpg123_fmt_none(mpg123_pars *mp)
+int attribute_align_arg mpg123_fmt_none(mpg123_pars *mp)
 {
 	if(mp == NULL) return MPG123_BAD_PARS;
 
@@ -186,7 +186,7 @@ int mpg123_fmt_none(mpg123_pars *mp)
 	return MPG123_OK;
 }
 
-int mpg123_format_all(mpg123_handle *mh)
+int attribute_align_arg mpg123_format_all(mpg123_handle *mh)
 {
 	int r;
 	if(mh == NULL) return MPG123_ERR;
@@ -197,7 +197,7 @@ int mpg123_format_all(mpg123_handle *mh)
 	return r;
 }
 
-int mpg123_fmt_all(mpg123_pars *mp)
+int attribute_align_arg mpg123_fmt_all(mpg123_pars *mp)
 {
 	if(mp == NULL) return MPG123_BAD_PARS;
 
@@ -207,7 +207,7 @@ int mpg123_fmt_all(mpg123_pars *mp)
 	return MPG123_OK;
 }
 
-int mpg123_format(mpg123_handle *mh, long rate, int channels, int encodings)
+int attribute_align_arg mpg123_format(mpg123_handle *mh, long rate, int channels, int encodings)
 {
 	int r;
 	if(mh == NULL) return MPG123_ERR;
@@ -217,7 +217,7 @@ int mpg123_format(mpg123_handle *mh, long rate, int channels, int encodings)
 	return r;
 }
 
-int mpg123_fmt(mpg123_pars *mp, long rate, int channels, int encodings)
+int attribute_align_arg mpg123_fmt(mpg123_pars *mp, long rate, int channels, int encodings)
 {
 	int ie, ic, ratei;
 	int ch[2] = {0, 1};
@@ -243,13 +243,13 @@ int mpg123_fmt(mpg123_pars *mp, long rate, int channels, int encodings)
 	return MPG123_OK;
 }
 
-int mpg123_format_support(mpg123_handle *mh, long rate, int encoding)
+int attribute_align_arg mpg123_format_support(mpg123_handle *mh, long rate, int encoding)
 {
 	if(mh == NULL) return 0;
 	else return mpg123_fmt_support(&mh->p, rate, encoding);
 }
 
-int mpg123_fmt_support(mpg123_pars *mp, long rate, int encoding)
+int attribute_align_arg mpg123_fmt_support(mpg123_pars *mp, long rate, int encoding)
 {
 	int ch = 0;
 	int ratei, enci;
