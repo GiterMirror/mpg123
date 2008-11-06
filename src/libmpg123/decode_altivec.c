@@ -1,7 +1,7 @@
 /*
 	decode.c: decoding samples...
 
-	copyright 1995-2008 by the mpg123 project - free software under the terms of the LGPL 2.1
+	copyright 1995-2006 by the mpg123 project - free software under the terms of the LGPL 2.1
 	see COPYING and AUTHORS files in distribution or http://mpg123.org
 	initially written by Michael Hipp
 	altivec optimization by tmkk
@@ -44,8 +44,8 @@ int synth_1to1_8bit_altivec(real *bandPtr,int channel, mpg123_handle *fr, int fi
 
 int synth_1to1_8bit_mono_altivec(real *bandPtr, mpg123_handle *fr)
 {
-  short samples_tmp[64];
-  short *tmp1 = samples_tmp;
+  sample_t samples_tmp[64];
+  sample_t *tmp1 = samples_tmp;
   int i,ret;
 
   /* save buffer stuff, trick samples_tmp into there, decode, restore */
@@ -58,7 +58,11 @@ int synth_1to1_8bit_mono_altivec(real *bandPtr, mpg123_handle *fr)
 
   samples += pnt;
   for(i=0;i<32;i++) {
+#ifdef FLOATOUT
+    *samples++ = 0;
+#else
     *samples++ = fr->conv16to8[*tmp1>>AUSHIFT];
+#endif
     tmp1 += 2;
   }
   fr->buffer.fill = pnt + 32;
@@ -68,8 +72,8 @@ int synth_1to1_8bit_mono_altivec(real *bandPtr, mpg123_handle *fr)
 
 int synth_1to1_8bit_mono2stereo_altivec(real *bandPtr, mpg123_handle *fr)
 {
-  short samples_tmp[64];
-  short *tmp1 = samples_tmp;
+  sample_t samples_tmp[64];
+  sample_t *tmp1 = samples_tmp;
   int i,ret;
 
   /* save buffer stuff, trick samples_tmp into there, decode, restore */
@@ -82,8 +86,13 @@ int synth_1to1_8bit_mono2stereo_altivec(real *bandPtr, mpg123_handle *fr)
 
   samples += pnt;
   for(i=0;i<32;i++) {
+#ifdef FLOATOUT
+    *samples++ = 0;
+    *samples++ = 0;
+#else
     *samples++ = fr->conv16to8[*tmp1>>AUSHIFT];
     *samples++ = fr->conv16to8[*tmp1>>AUSHIFT];
+#endif
     tmp1 += 2;
   }
   fr->buffer.fill = pnt + 64;
@@ -93,8 +102,8 @@ int synth_1to1_8bit_mono2stereo_altivec(real *bandPtr, mpg123_handle *fr)
 
 int synth_1to1_mono_altivec(real *bandPtr, mpg123_handle *fr)
 {
-  short samples_tmp[64];
-  short *tmp1 = samples_tmp;
+  sample_t samples_tmp[64];
+  sample_t *tmp1 = samples_tmp;
   int i,ret;
 
   /* save buffer stuff, trick samples_tmp into there, decode, restore */
@@ -108,11 +117,11 @@ int synth_1to1_mono_altivec(real *bandPtr, mpg123_handle *fr)
   /* now append samples from samples_tmp */
   samples += pnt; /* just the next mem in frame buffer */
   for(i=0;i<32;i++){
-    *( (short *)samples) = *tmp1;
-    samples += sizeof(short);
+    *( (sample_t *)samples) = *tmp1;
+    samples += sizeof(sample_t);
     tmp1 += 2;
   }
-  fr->buffer.fill = pnt + 32*sizeof(short);
+  fr->buffer.fill = pnt + 32*sizeof(sample_t);
 
   return ret;
 }
@@ -124,11 +133,11 @@ int synth_1to1_mono2stereo_altivec(real *bandPtr, mpg123_handle *fr)
   unsigned char *samples = fr->buffer.data;
 
   ret = synth_1to1_altivec(bandPtr,0,fr,1);
-  samples += fr->buffer.fill - 64*sizeof(short);
+  samples += fr->buffer.fill - 64*sizeof(sample_t);
 
   for(i=0;i<32;i++) {
-    ((short *)samples)[1] = ((short *)samples)[0];
-    samples+=2*sizeof(short);
+    ((sample_t *)samples)[1] = ((sample_t *)samples)[0];
+    samples+=2*sizeof(sample_t);
   }
 
   return ret;
@@ -138,7 +147,7 @@ int synth_1to1_mono2stereo_altivec(real *bandPtr, mpg123_handle *fr)
 int synth_1to1_altivec(real *bandPtr,int channel,mpg123_handle *fr, int final)
 {
   static const int step = 2;
-  short *samples = (short *) (fr->buffer.data+fr->buffer.fill);
+  sample_t *samples = (sample_t *) (fr->buffer.data+fr->buffer.fill);
 
   real *b0, **buf;
   int clip = 0; 

@@ -216,8 +216,7 @@ enum mpg123_errors
 	MPG123_NULL_POINTER, /**< You gave a null pointer somewhere where you shouldn't have. */
 	MPG123_BAD_KEY,	/**< Bad key value given. */
 	MPG123_NO_INDEX,	/**< No frame index in this build. */
-	MPG123_INDEX_FAIL,	/**< Something with frame index went wrong. */
-	MPG123_BAD_DECODER_SETUP /**< Something prevents a proper decoder setup */
+	MPG123_INDEX_FAIL	/**< Something with frame index went wrong. */
 };
 
 /** Return a string describing that error errcode means. */

@@ -72,8 +72,7 @@ void prepare_decode_tables()
 void make_decode_tables_mmx(mpg123_handle *fr)
 {
 	debug("MMX decode tables");
-	/* Take care: The scale should be like before, when we didn't have float output all around. */
-	make_decode_tables_mmx_asm((fr->lastscale < 0 ? fr->p.outscale : fr->lastscale)*SHORT_SCALE, fr->decwin_mmx, fr->decwins);
+	make_decode_tables_mmx_asm((fr->lastscale < 0 ? fr->p.outscale : fr->lastscale), fr->decwin_mmx, fr->decwins);
 	debug("MMX decode tables done");
 }
 #endif
@@ -83,13 +82,12 @@ void make_decode_tables(mpg123_handle *fr)
 {
   int i,j;
   int idx = 0;
-  /* Scale is always based on 1.0 . */
-  double scaleval = -0.5*(fr->lastscale < 0 ? fr->p.outscale : fr->lastscale);
-  debug1("decode tables with scaleval %g", scaleval);
+  scale_t scaleval = -(fr->lastscale < 0 ? fr->p.outscale : fr->lastscale);
+  debug("MMX decode tables");
   for(i=0,j=0;i<256;i++,j++,idx+=32)
   {
     if(idx < 512+16)
-      fr->decwin[idx+16] = fr->decwin[idx] = DOUBLE_TO_REAL((double) intwinbase[j] * scaleval);
+      fr->decwin[idx+16] = fr->decwin[idx] = DOUBLE_TO_REAL((double) intwinbase[j] / 65536.0 * (double) scaleval);
 
     if(i % 32 == 31)
       idx -= 1023;
@@ -100,14 +98,14 @@ void make_decode_tables(mpg123_handle *fr)
   for( /* i=256 */ ;i<512;i++,j--,idx+=32)
   {
     if(idx < 512+16)
-      fr->decwin[idx+16] = fr->decwin[idx] = DOUBLE_TO_REAL((double) intwinbase[j] * scaleval);
+      fr->decwin[idx+16] = fr->decwin[idx] = DOUBLE_TO_REAL((double) intwinbase[j] / 65536.0 * (double) scaleval);
 
     if(i % 32 == 31)
       idx -= 1023;
     if(i % 64 == 63)
       scaleval = - scaleval;
   }
-  debug("decode tables done");
+  debug("MMX decode tables done");
 }
 #endif
 
