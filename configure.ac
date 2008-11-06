@@ -10,7 +10,7 @@ AC_PREREQ(2.57)
 
 dnl ############# Initialisation
 
-AC_INIT([mpg123], [1.6.0], [mpg123-devel@lists.sourceforge.net])
+AC_INIT([mpg123], [1.6.1], [mpg123-devel@lists.sourceforge.net])
 LIBMPG123_VERSION=11:2:11
 AC_SUBST(LIBMPG123_VERSION)
 
@@ -399,6 +399,10 @@ AC_SUBST(LARGEFILE_SWITCH)
 AC_CHECK_TYPE(size_t, unsigned int)
 AC_CHECK_TYPE(ssize_t, int)
 AC_CHECK_TYPE(off_t,  long int)
+AC_CHECK_SIZEOF(size_t,4)
+AC_CHECK_SIZEOF(ssize_t,4)
+AC_CHECK_SIZEOF(off_t,4)
+AC_CHECK_SIZEOF(long,4)
 
 dnl ############## Function Checks
 
