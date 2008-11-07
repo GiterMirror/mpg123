@@ -2,6 +2,7 @@
 ---
 
 - Fix printing of largefile offsets in remote control interface.
+- Some portability fixes (reduced compiler warnings on Solaris, p.ex.).
 
 1.6.0
 ---
