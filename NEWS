@@ -1,3 +1,8 @@
+1.6.2
+---
+
+- Fix default IPv6 detection in configure.ac (a typo has been introduced before).
+
 1.6.1
 ---
 

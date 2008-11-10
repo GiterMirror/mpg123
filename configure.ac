@@ -10,7 +10,7 @@ AC_PREREQ(2.57)
 
 dnl ############# Initialisation
 
-AC_INIT([mpg123], [1.6.1], [mpg123-devel@lists.sourceforge.net])
+AC_INIT([mpg123], [1.6.2], [mpg123-devel@lists.sourceforge.net])
 LIBMPG123_VERSION=11:2:11
 AC_SUBST(LIBMPG123_VERSION)
 
@@ -448,7 +448,7 @@ if test x"$fifo" = xenabled; then
 fi
 
 AC_CHECK_FUNCS( getaddrinfo, [ have_ipv6=yes ], [ have_ipv6=no ] )
-if test x"$ipv6" = xautox; then
+if test x"$ipv6" = xauto; then
 	if test x"$have_ipv6" = xyes; then
 		ipv6=enabled
 	else
