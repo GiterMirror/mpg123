@@ -115,17 +115,22 @@
 #define         MPG_MD_DUAL_CHANNEL     2
 #define         MPG_MD_MONO             3
 
-/* We support short or float output samples...
-   Short integer amplitude is scaled by this. */
-#define SHORT_SCALE 32768
-
+/* float output only for generic decoder! */
+#ifdef FLOATOUT
+#define MAXOUTBURST 1.0
+#define scale_t double
+#else
+/* I suspect that 32767 would be a better idea here, but Michael put this in... */
+#define MAXOUTBURST 32768
+#define scale_t long
+#endif
 
 /* Pre Shift fo 16 to 8 bit converter table */
 #define AUSHIFT (3)
 
-#include "optimize.h"
 #include "decode.h"
 #include "parse.h"
+#include "optimize.h"
 #include "frame.h"
 
 /* fr is a mpg123_handle* by convention here... */
@@ -137,8 +142,5 @@
 #define PVERB(mp, level) (!((mp)->flags & MPG123_QUIET) && (mp)->verbose >= (level))
 
 int decode_update(mpg123_handle *mh);
-/* residing in format.c  */
-off_t samples_to_bytes(mpg123_handle *fr , off_t s);
-off_t bytes_to_samples(mpg123_handle *fr , off_t b);
 
 #endif

@@ -16,7 +16,6 @@ static const long my_rates[MPG123_RATES] = /* only the standard rates */
 	16000, 22050, 24000,
 	32000, 44100, 48000,
 };
-
 static const int my_encodings[MPG123_ENCODINGS] =
 {
 	MPG123_ENC_SIGNED_16, 
@@ -31,36 +30,22 @@ static const int my_encodings[MPG123_ENCODINGS] =
 	MPG123_ENC_FLOAT_64
 };
 
-/* Only one type of float is supported. */
-# ifdef REAL_IS_FLOAT
-#  define MPG123_FLOAT_ENC MPG123_ENC_FLOAT_32
-# else
-#  define MPG123_FLOAT_ENC MPG123_ENC_FLOAT_64
-# endif
-
-/* The list of actually possible encodings. */
-static const int good_encodings[] =
+/* Check if encoding (mask) is a valid one in this build. */
+static int good_enc(int enc)
 {
-	MPG123_ENC_SIGNED_16,
-	/* MPG123_ENC_UNSIGNED_16, You've seen code anywhere to actualy produce unsinged 16 ? It never worked. */
-	MPG123_ENC_UNSIGNED_8,
-	MPG123_ENC_SIGNED_8,
-	MPG123_ENC_ULAW_8,
-	MPG123_ENC_ALAW_8,
-#ifndef REAL_IS_FIXED
-	MPG123_FLOAT_ENC
+	if(!(enc & MPG123_ENC_ANY)) return FALSE;
+#ifdef FLOATOUT
+#ifdef REAL_IS_FLOAT /* we know only 32bit*/
+	if(enc != MPG123_ENC_FLOAT_32) return FALSE;
+#else
+	if(enc != MPG123_ENC_FLOAT_64) return FALSE;
 #endif
-};
+#else
+	if(enc & MPG123_ENC_FLOAT) return FALSE;
+#endif
+	if(enc & MPG123_ENC_32) return FALSE; /* Not supported yet. */
 
-/* Check if encoding is a valid one in this build.
-   ...lazy programming: linear search. */
-static int good_enc(const int enc)
-{
-	size_t i;
-	for(i=0; i<sizeof(good_encodings)/sizeof(int); ++i)
-	if(enc == good_encodings[i]) return TRUE;
-
-	return FALSE;
+	return TRUE;
 }
 
 void attribute_align_arg mpg123_rates(const long **list, size_t *number)
@@ -72,8 +57,18 @@ void attribute_align_arg mpg123_rates(const long **list, size_t *number)
 /* Now that's a bit tricky... One build of the library knows only a subset of the encodings. */
 void attribute_align_arg mpg123_encodings(const int **list, size_t *number)
 {
-	if(list   != NULL) *list   = good_encodings;
-	if(number != NULL) *number = sizeof(good_encodings)/sizeof(int);
+	size_t offset = 0;
+	size_t n = sizeof(my_encodings)/sizeof(int)-4; /* The last 4 are special. */
+#ifdef FLOATOUT /* Skip integer encodings. */
+	n = 1;
+#ifdef REAL_IS_FLOAT /* we know only 32bit*/
+	offset = 8; /* Only 32bit float */
+#else
+	offset = 9; /* Only 64bit float */
+#endif
+#endif /* There should be a branch for 32bit integer; but that's not anywhere now. */
+	if(list   != NULL) *list   = my_encodings+offset;
+	if(number != NULL) *number = n;
 }
 
 /*	char audio_caps[NUM_CHANNELS][MPG123_RATES+1][MPG123_ENCODINGS]; */
@@ -120,33 +115,6 @@ static int freq_fit(mpg123_handle *fr, struct audioformat *nf, int f0, int f2)
 	if(cap_fit(fr,nf,f0,f2)) return 1;
 	nf->rate>>=1;
 	if(cap_fit(fr,nf,f0,f2)) return 1;
-	/* If nothing worked, try the other rates, only without constrains from user.
-	   In case you didn't guess: We enable flexible resampling if we find a working rate. */
-	if(!fr->p.force_rate && fr->p.down_sample == 0)
-	{
-		int i;
-		int c  = nf->channels-1;
-		int rn = rate2num(&fr->p, frame_freq(fr));
-		int rrn;
-		if(rn < 0) return 0;
-		/* Try higher rates first. */
-		for(i=f0;i<f2;i++) for(rrn=rn+1; rrn<MPG123_RATES; ++rrn)
-		if(fr->p.audio_caps[c][rrn][i])
-		{
-			nf->rate = my_rates[rrn];
-			nf->encoding = my_encodings[i];
-			return 1;
-		}
-		/* Then lower rates. */
-		for(i=f0;i<f2;i++) for(rrn=rn-1; rrn>=0; --rrn)
-		if(fr->p.audio_caps[c][rrn][i])
-		{
-			nf->rate = my_rates[rrn];
-			nf->encoding = my_encodings[i];
-			return 1;
-		}
-	}
-
 	return 0;
 }
 
@@ -156,24 +124,21 @@ int frame_output_format(mpg123_handle *fr)
 {
 	struct audioformat nf;
 	int f0=0;
-	int f2=MPG123_ENCODINGS; /* Omit the 32bit and float encodings. */
+	int f2=MPG123_ENCODINGS-4; /* Omit the 32bit and float encodings. */
 	mpg123_pars *p = &fr->p;
 	/* initialize new format, encoding comes later */
 	nf.channels = fr->stereo;
 
-	/* All this forcing should be removed in favour of the capabilities table... */
-	if(p->flags & MPG123_FORCE_8BIT)
-	{
-		f0 = 2; /* Skip the 16bit encodings. */
-		f2 = 6; /* Stop before the 32bit encodings. */
-	}
-	if(p->flags & MPG123_FORCE_FLOAT)
-	{
-		f0 = 8;  /* Start with 32bit float. */
-		f2 = 10; /* End with 64bit float. */
-	}
-
-	/* There should be a branch for 32bit integer; but that's not anywhere now. */
+#ifdef FLOATOUT /* Skip integer encodings. */
+#ifdef REAL_IS_FLOAT /* we know only 32bit*/
+	f0 = 8; /* Only 32bit float */
+#else
+	f0 = 9; /* Only 64bit float */
+#endif
+	f2 = f0+1; /* Only one encoding to try... */
+#else
+	if(p->flags & MPG123_FORCE_8BIT) f0 = 2; /* skip the 16bit encodings */
+#endif /* There should be a branch for 32bit integer; but that's not anywhere now. */
 
 	/* force stereo is stronger */
 	if(p->flags & MPG123_FORCE_MONO)   nf.channels = 1;
@@ -183,14 +148,14 @@ int frame_output_format(mpg123_handle *fr)
 	{
 		nf.rate = p->force_rate;
 		if(cap_fit(fr,&nf,f0,2)) goto end;            /* 16bit encodings */
-		if(cap_fit(fr,&nf,f0<=2 ? 2 : f0,f2)) goto end; /*  8bit encodings */
+		if(cap_fit(fr,&nf,2,f2)) goto end; /*  8bit encodings */
 
 		/* try again with different stereoness */
 		if(nf.channels == 2 && !(p->flags & MPG123_FORCE_STEREO)) nf.channels = 1;
 		else if(nf.channels == 1 && !(p->flags & MPG123_FORCE_MONO)) nf.channels = 2;
 
 		if(cap_fit(fr,&nf,f0,2)) goto end;            /* 16bit encodings */
-		if(cap_fit(fr,&nf,f0<=2 ? 2 : f0,f2)) goto end; /*  8bit encodings */
+		if(cap_fit(fr,&nf,2,f2)) goto end; /*  8bit encodings */
 
 		if(NOQUIET)
 		error3( "Unable to set up output format! Constraints: %s%s%liHz.",
@@ -205,24 +170,22 @@ int frame_output_format(mpg123_handle *fr)
 	}
 
 	if(freq_fit(fr, &nf, f0, 2)) goto end; /* try rates with 16bit */
-	if(freq_fit(fr, &nf, f0<=2 ? 2 : f0, f2)) goto end; /* ... 8bit */
+	if(freq_fit(fr, &nf,  2, f2)) goto end; /* ... 8bit */
 
 	/* try again with different stereoness */
 	if(nf.channels == 2 && !(p->flags & MPG123_FORCE_STEREO)) nf.channels = 1;
 	else if(nf.channels == 1 && !(p->flags & MPG123_FORCE_MONO)) nf.channels = 2;
 
 	if(freq_fit(fr, &nf, f0, 2)) goto end; /* try rates with 16bit */
-	if(freq_fit(fr, &nf,  f0<=2 ? 2 : f0, f2)) goto end; /* ... 8bit */
+	if(freq_fit(fr, &nf,  2, f2)) goto end; /* ... 8bit */
 
 	/* Here is the _bad_ end. */
 	if(NOQUIET)
-	{
-		error5( "Unable to set up output format! Constraints: %s%s%li, %li or %liHz.",
-		        ( p->flags & MPG123_FORCE_STEREO ? "stereo, " :
-		          (p->flags & MPG123_FORCE_MONO ? "mono, "  : "") ),
-		        (p->flags & MPG123_FORCE_8BIT  ? "8bit, " : ""),
-		        frame_freq(fr),  frame_freq(fr)>>1, frame_freq(fr)>>2 );
-	}
+	error5( "Unable to set up output format! Constraints: %s%s%li, %li or %liHz.",
+	        ( p->flags & MPG123_FORCE_STEREO ? "stereo, " :
+	          (p->flags & MPG123_FORCE_MONO ? "mono, "  : "") ),
+	        (p->flags & MPG123_FORCE_8BIT  ? "8bit, " : ""),
+	        frame_freq(fr),  frame_freq(fr)>>1, frame_freq(fr)>>2 );
 /*	if(NOQUIET && p->verbose <= 1) print_capabilities(fr); */
 
 	fr->err = MPG123_BAD_OUTFORMAT;
@@ -232,31 +195,15 @@ end: /* Here is the _good_ end. */
 	/* we had a successful match, now see if there's a change */
 	if(nf.rate == fr->af.rate && nf.channels == fr->af.channels && nf.encoding == fr->af.encoding)
 	{
-		debug2("Old format with %i channels, and FORCE_MONO=%li", nf.channels, p->flags & MPG123_FORCE_MONO);
+		debug("Old format!");
 		return 0; /* the same format as before */
 	}
 	else /* a new format */
 	{
-		debug1("New format with %i channels!", nf.channels);
+		debug("New format!");
 		fr->af.rate = nf.rate;
 		fr->af.channels = nf.channels;
 		fr->af.encoding = nf.encoding;
-		/* Cache the size of one sample in bytes, for ease of use. */
-		if(fr->af.encoding & MPG123_ENC_8)
-		fr->af.encsize = 1;
-		else if(fr->af.encoding & MPG123_ENC_16)
-		fr->af.encsize = 2;
-		else if(fr->af.encoding & MPG123_ENC_32 || fr->af.encoding == MPG123_ENC_FLOAT_32)
-		fr->af.encsize = 4;
-		else if(fr->af.encoding == MPG123_ENC_FLOAT_64)
-		fr->af.encsize = 8;
-		else
-		{
-			if(NOQUIET) error1("Some unknown encoding??? (%i)", fr->af.encoding);
-
-			fr->err = MPG123_BAD_OUTFORMAT;
-			return -1;
-		}
 		return 1;
 	}
 }
@@ -361,15 +308,4 @@ int attribute_align_arg mpg123_fmt_support(mpg123_pars *mp, long rate, int encod
 	if(mp->audio_caps[0][ratei][enci]) ch |= MPG123_MONO;
 	if(mp->audio_caps[1][ratei][enci]) ch |= MPG123_STEREO;
 	return ch;
-}
-
-/* take into account: channels, bytes per sample -- NOT resampling!*/
-off_t samples_to_bytes(mpg123_handle *fr , off_t s)
-{
-	return s * fr->af.encsize * fr->af.channels;
-}
-
-off_t bytes_to_samples(mpg123_handle *fr , off_t b)
-{
-	return b / fr->af.encsize / fr->af.channels;
 }
