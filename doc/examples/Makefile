@@ -1,4 +1,4 @@
-targets = feedseek mpg123_to_wav scan id3dump mpglib
+targets = mpg123_to_wav scan id3dump mpglib
 
 all: $(targets)
 
@@ -11,10 +11,7 @@ SND_LDFLAGS    := $(shell pkg-config --libs   sndfile)
 compile = $(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) $(MPG123_CFLAGS) $(MPG123_LDFLAGS)
 
 mpg123_to_wav: mpg123_to_wav.c
-	$(compile) $(SND_CFLAGS) $(SND_LDFLAGS) -o mpg123_to_wav mpg123_to_wav.c
-
-feedseek: feedseek.c
-	$(compile) -o feedseek feedseek.c
+	$(compile) $(SND_CFLAGS) $(SND_LDFLAGS)-o mpg123_to_wav mpg123_to_wav.c
 
 scan: scan.c
 	$(compile) -o scan scan.c

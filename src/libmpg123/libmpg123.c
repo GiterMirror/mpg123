@@ -57,6 +57,7 @@ static int initialized = 0;
 
 #endif
 
+
 #ifdef GAPLESS
 /*
 	Take the buffer after a frame decode (strictly: it is the data from frame fr->num!) and cut samples out.
@@ -106,7 +107,9 @@ int attribute_align_arg mpg123_init(void)
 
 	init_layer2(); /* inits also shared tables with layer1 */
 	init_layer3();
+#ifndef OPT_MMX_ONLY
 	prepare_decode_tables();
+#endif
 	check_decoders();
 	initialized = 1;
 	return MPG123_OK;
@@ -129,7 +132,7 @@ mpg123_handle attribute_align_arg *mpg123_parnew(mpg123_pars *mp, const char* de
 {
 	mpg123_handle *fr = NULL;
 	int err = MPG123_OK;
-#if (defined CCALIGN) && (defined NEED_ALIGNCHECK) && ((defined DEBUG) || (defined CHECK_ALIGN))
+#ifdef DEBUG
 #ifdef CCALIGN
 	double ALIGNED(16) altest[4];
 	if(((size_t)altest) % 16 != 0)
@@ -156,8 +159,7 @@ mpg123_handle attribute_align_arg *mpg123_parnew(mpg123_pars *mp, const char* de
 	}
 	if(fr != NULL)
 	{
-		/* Cleanup that mess! ... use mpg123_decoder / decode_update! */
-		if(frame_outbuffer(fr) != 0 || (frame_buffers(fr) != 0))
+		if((frame_outbuffer(fr) != 0) || (frame_buffers(fr) != 0))
 		{
 			err = MPG123_NO_BUFFERS;
 			frame_exit(fr);
@@ -166,16 +168,11 @@ mpg123_handle attribute_align_arg *mpg123_parnew(mpg123_pars *mp, const char* de
 		}
 		else
 		{
-			/* I smell cleanup here... with get_next_frame() */
-/*			if(decode_update(fr) != 0)
-			{
-				err = fr->err != MPG123_OK ? fr->err : MPG123_BAD_DECODER;
-				frame_exit(fr);
-				free(fr);
-				fr = NULL;
-			}
-			else */
+			opt_make_decode_tables(fr);
 			fr->decoder_change = 1;
+			/* happening on frame change instead:
+			init_layer3_stuff(fr);
+			init_layer2_stuff(fr); */
 		}
 	}
 	else if(err == MPG123_OK) err = MPG123_OUT_OF_MEM;
@@ -214,8 +211,7 @@ int attribute_align_arg mpg123_decoder(mpg123_handle *mh, const char* decoder)
 		frame_exit(mh);
 		return MPG123_ERR;
 	}
-	/* I smell cleanup here... with get_next_frame() */
-	decode_update(mh);
+	opt_make_decode_tables(mh);
 	mh->decoder_change = 1;
 	return MPG123_OK;
 }
@@ -253,6 +249,9 @@ int attribute_align_arg mpg123_par(mpg123_pars *mp, enum mpg123_parms key, long 
 		case MPG123_FLAGS:
 #ifndef GAPLESS
 			if(val & MPG123_GAPLESS) ret = MPG123_NO_GAPLESS;
+#endif
+#ifdef FLOATOUT
+			if(val & MPG123_FORCE_8BIT) ret = MPG123_NO_8BIT;
 #endif
 			if(ret == MPG123_OK) mp->flags = val;
 			debug1("set flags to 0x%lx", (unsigned long) mp->flags);
@@ -292,9 +291,11 @@ int attribute_align_arg mpg123_par(mpg123_pars *mp, enum mpg123_parms key, long 
 			mp->icy_interval = val > 0 ? val : 0;
 		break;
 		case MPG123_OUTSCALE:
-			/* Choose the value that is non-zero, if any.
-			   Downscaling integers to 1.0 . */
-			mp->outscale = val == 0 ? fval : (double)val/SHORT_SCALE;
+#ifdef FLOATOUT
+			mp->outscale = fval;
+#else
+			mp->outscale = val;
+#endif
 		break;
 		case MPG123_TIMEOUT:
 #ifndef WIN32
@@ -362,8 +363,11 @@ int attribute_align_arg mpg123_getpar(mpg123_pars *mp, enum mpg123_parms key, lo
 			if(val) *val = (long)mp->icy_interval;
 		break;
 		case MPG123_OUTSCALE:
+#ifdef FLOATOUT
 			if(fval) *fval = mp->outscale;
-			if(val) *val = (long)(mp->outscale*SHORT_SCALE);
+#else
+			if(val) *val = mp->outscale;
+#endif
 		break;
 		case MPG123_RESYNC_LIMIT:
 			if(val) *val = mp->resync_limit;
@@ -486,16 +490,9 @@ int attribute_align_arg mpg123_replace_reader( mpg123_handle *mh,
 int decode_update(mpg123_handle *mh)
 {
 	long native_rate;
-	int b;
 	ALIGNCHECK(mh);
 	native_rate = frame_freq(mh);
-
-	b = frame_output_format(mh); /* Select the new output format based on given constraints. */
-	if(b < 0) return MPG123_ERR;
-
-	if(b == 1) mh->new_format = 1; /* Store for later... */
-
-	debug3("updating decoder structure with native rate %li and af.rate %li (new format: %i)", native_rate, mh->af.rate, mh->new_format);
+	debug2("updating decoder structure with native rate %li and af.rate %li", native_rate, mh->af.rate);
 	if(mh->af.rate == native_rate) mh->down_sample = 0;
 	else if(mh->af.rate == native_rate>>1) mh->down_sample = 1;
 	else if(mh->af.rate == native_rate>>2) mh->down_sample = 2;
@@ -507,7 +504,7 @@ int decode_update(mpg123_handle *mh)
 		case 2:
 			mh->down_sample_sblimit = SBLIMIT>>(mh->down_sample);
 			/* With downsampling I get less samples per frame */
-			mh->outblock = samples_to_bytes(mh, (spf(mh)>>mh->down_sample));
+			mh->outblock = sizeof(sample_t)*mh->af.channels*(spf(mh)>>mh->down_sample);
 		break;
 		case 3:
 		{
@@ -518,7 +515,7 @@ int decode_update(mpg123_handle *mh)
 				mh->down_sample_sblimit /= frame_freq(mh);
 			}
 			else mh->down_sample_sblimit = SBLIMIT;
-			mh->outblock = mh->af.encsize * mh->af.channels *
+			mh->outblock = sizeof(sample_t) * mh->af.channels *
 			               ( ( NTOM_MUL-1+spf(mh)
 			                   * (((size_t)NTOM_MUL*mh->af.rate)/frame_freq(mh))
 			                 )/NTOM_MUL );
@@ -533,7 +530,8 @@ int decode_update(mpg123_handle *mh)
 	}
 	else mh->single = (mh->p.flags & MPG123_FORCE_MONO)-1;
 	if(set_synth_functions(mh) != 0) return -1;;
-
+	init_layer3_stuff(mh);
+	init_layer2_stuff(mh);
 	do_rva(mh);
 	debug3("done updating decoder structure with native rate %li and af.rate %li and down_sample %i", frame_freq(mh), mh->af.rate, mh->down_sample);
 
@@ -542,8 +540,7 @@ int decode_update(mpg123_handle *mh)
 
 size_t attribute_align_arg mpg123_safe_buffer()
 {
-	/* real is the largest possible output (it's 32bit float, 32bit int or 64bit double). */
-	return sizeof(real)*2*1152*NTOM_MAX;
+	return sizeof(sample_t)*2*1152*NTOM_MAX;
 }
 
 size_t attribute_align_arg mpg123_outblock(mpg123_handle *mh)
@@ -598,16 +595,15 @@ static int get_next_frame(mpg123_handle *mh)
 	}
 	if(change)
 	{
-		if(decode_update(mh) < 0)  /* dito... */
-		return MPG123_ERR;
-
-debug1("new format: %i", mh->new_format);
-
+		int b = frame_output_format(mh); /* Select the new output format based on given constraints. */
+		if(b < 0) return MPG123_ERR; /* not nice to fail here... perhaps once should add possibility to repeat this step */
+		if(decode_update(mh) < 0) return MPG123_ERR; /* dito... */
 		mh->decoder_change = 0;
+		if(b == 1) mh->new_format = 1; /* Store for later... */
 #ifdef GAPLESS
 		if(mh->fresh)
 		{
-			int b=0;
+			b=0;
 			/* Prepare offsets for gapless decoding. */
 			debug1("preparing gapless stuff with native rate %li", frame_freq(mh));
 			frame_gapless_realinit(mh);
@@ -630,12 +626,10 @@ void decode_the_frame(mpg123_handle *fr)
 {
 	size_t needed_bytes = samples_to_bytes(fr, frame_outs(fr, fr->num+1)-frame_outs(fr, fr->num));
 	fr->clip += (fr->do_layer)(fr);
-
 	/* There could be less data than promised. */
 	if(fr->buffer.fill < needed_bytes)
 	{
-		if(NOQUIET)
-		fprintf(stderr, "Note: broken frame %li, filling up with %"SIZE_P" zeroes, from %"SIZE_P"\n", (long)fr->num, (size_p)(needed_bytes-fr->buffer.fill), (size_p)fr->buffer.fill);
+		if(NOQUIET) fprintf(stderr, "Note: broken frame %li, filling up with zeroes\n", (long)fr->num);
 
 		/* One could do a loop with individual samples instead... but zero is zero. */
 		memset(fr->buffer.data + fr->buffer.fill, 0, needed_bytes - fr->buffer.fill);
@@ -669,7 +663,7 @@ int attribute_align_arg mpg123_decode_frame(mpg123_handle *mh, off_t *num, unsig
 		{
 			if(mh->new_format)
 			{
-				debug("notifiying new format");
+				mh->new_format = 0;
 				return MPG123_NEW_FORMAT;
 			}
 			if(num != NULL) *num = mh->num;
@@ -758,7 +752,7 @@ int attribute_align_arg mpg123_decode(mpg123_handle *mh, const unsigned char *in
 		{
 			if(mh->new_format)
 			{
-				debug("notifiying new format");
+				mh->new_format = 0;
 				return MPG123_NEW_FORMAT;
 			}
 			if(mh->buffer.size - mh->buffer.fill < mh->outblock)
@@ -1082,13 +1076,12 @@ off_t attribute_align_arg mpg123_length(mpg123_handle *mh)
 	if(b<0) return b;
 	if(mh->track_samples > -1) length = mh->track_samples;
 	else if(mh->track_frames > 0) length = mh->track_frames*spf(mh);
-	else if(mh->rdat.filelen > 0) /* Let the case of 0 length just fall through. */
+	else if(mh->rdat.filelen >= 0) /* Let the case of 0 length just fall through. */
 	{
 		/* A bad estimate. Ignoring tags 'n stuff. */
 		double bpf = mh->mean_framesize ? mh->mean_framesize : compute_bpf(mh);
 		length = (off_t)((double)(mh->rdat.filelen)/bpf*spf(mh));
 	}
-	else if(mh->rdat.filelen == 0) return mpg123_tell(mh); /* we could be in feeder mode */
 	else return MPG123_ERR; /* No length info there! */
 
 	length = frame_ins2outs(mh, length);
@@ -1212,12 +1205,6 @@ int attribute_align_arg mpg123_close(mpg123_handle *mh)
 	if(mh == NULL) return MPG123_ERR;
 	if(mh->rd != NULL && mh->rd->close != NULL) mh->rd->close(mh);
 	mh->rd = NULL;
-	if(mh->new_format)
-	{
-		debug("Hey, we are closing a track before the new format has been queried...");
-		invalidate_format(&mh->af);
-		mh->new_format = 0;
-	}
 	return MPG123_OK;
 }
 
@@ -1269,8 +1256,7 @@ static const char *mpg123_error[] =
 	"Inappropriate NULL-pointer provided.",
 	"Bad key value given.",
 	"There is no frame index (disabled in this build).",
-	"Frame index operation failed.",
-	"Decoder setup failed (invalid combination of settings?)"
+	"Frame index operation failed."
 };
 
 const char* attribute_align_arg mpg123_plain_strerror(int errcode)
