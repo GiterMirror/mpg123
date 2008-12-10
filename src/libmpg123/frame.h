@@ -48,6 +48,8 @@ struct audioformat
 enum optdec { autodec=-1, nodec=0, generic, idrei, ivier, ifuenf, ifuenf_dither, mmx, dreidnow, dreidnowext, altivec, sse };
 enum optcla { nocla=0, normal, mmxsse };
 
+void invalidate_format(struct audioformat *af);
+
 struct mpg123_pars_struct
 {
 	int verbose;    /* verbose level */

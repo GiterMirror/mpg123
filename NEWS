@@ -1,3 +1,8 @@
+1.6.3
+---
+
+- Fix sf.net bug #2413608: Make sure a new format does not slip through after early close.
+
 1.6.2
 ---
 
