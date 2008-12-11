@@ -44,6 +44,7 @@ static int good_enc(int enc)
 	if(enc & MPG123_ENC_FLOAT) return FALSE;
 #endif
 	if(enc & MPG123_ENC_32) return FALSE; /* Not supported yet. */
+	if(enc == MPG123_ENC_UNSIGNED_16) return FALSE; /* Not supported yet... ever? */
 
 	return TRUE;
 }

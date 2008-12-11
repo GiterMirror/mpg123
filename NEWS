@@ -3,6 +3,7 @@
 
 - Fix sf.net bug #2413608: Make sure a new format does not slip through after early close.
 - Include equalizer example file and a piece of wrapper code for MSVC++ in the distribution.
+- Do not claim to support unsigned 16 bit encoding (never been the case).
 
 1.6.2
 ---
