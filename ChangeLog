@@ -1,3 +1,37 @@
+2008-12-20 15:57  thor
+
+	* tags/1.6.3/NEWS, tags/1.6.3/configure.ac: fix fifo default
+	  enabling
+
+2008-12-11 22:17  thor
+
+	* tags/1.6.3/NEWS, tags/1.6.3/src/libmpg123/format.c: Make clear
+	  that unsigned 16 bit output is not there.
+
+2008-12-10 16:56  thor
+
+	* tags/1.6.3/Makefile.am, tags/1.6.3/NEWS: Add equalize.dat and
+	  msvc.c to dist.
+
+2008-12-10 16:53  thor
+
+	* tags/1.6.3/NEWS, tags/1.6.3/configure.ac,
+	  tags/1.6.3/src/libmpg123/format.c,
+	  tags/1.6.3/src/libmpg123/frame.c,
+	  tags/1.6.3/src/libmpg123/frame.h,
+	  tags/1.6.3/src/libmpg123/libmpg123.c: Importing the fix for
+	  #2413608, naming it 1.6.3
+
+2008-12-10 16:48  thor
+
+	* tags/1.6.3: branching off bugfix release 1.6.3
+
+2008-11-10 23:16  thor
+
+	* tags/1.6.2/ChangeLog, tags/1.6.2/NEWS, tags/1.6.2/configure.ac:
+	  fixing that typo in configure.ac that prevents IPv6 auto
+	  detection
+
 2008-11-10 23:05  thor
 
 	* tags/1.6.2: forking off another bugfix release...
