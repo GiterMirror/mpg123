@@ -41,15 +41,12 @@
 				Name="VCCLCompilerTool"
 				Optimization="0"
 				AdditionalIncludeDirectories="../..;../../../../src/libmpg123"
-				PreprocessorDefinitions="WIN32;_CRT_SECURE_NO_WARNINGS;OPT_I486;REAL_IS_FLOAT;_DEBUG"
-				MinimalRebuild="false"
-				ExceptionHandling="0"
+				PreprocessorDefinitions="WIN32;_CRT_SECURE_NO_WARNINGS;OPT_I486;_DEBUG"
+				MinimalRebuild="true"
 				BasicRuntimeChecks="3"
 				RuntimeLibrary="3"
-				RuntimeTypeInfo="false"
 				WarningLevel="3"
 				DebugInformationFormat="3"
-				CompileAs="1"
 				DisableSpecificWarnings="4996"
 			/>
 			<Tool
@@ -106,22 +103,13 @@
 			<Tool
 				Name="VCCLCompilerTool"
 				Optimization="2"
-				InlineFunctionExpansion="2"
 				EnableIntrinsicFunctions="true"
-				FavorSizeOrSpeed="1"
-				OmitFramePointers="true"
 				AdditionalIncludeDirectories="../..;../../../../src/libmpg123"
-				PreprocessorDefinitions="WIN32;_CRT_SECURE_NO_WARNINGS;REAL_IS_FLOAT;OPT_I486"
-				ExceptionHandling="0"
+				PreprocessorDefinitions="WIN32;_CRT_SECURE_NO_WARNINGS;OPT_I486"
 				RuntimeLibrary="2"
-				BufferSecurityCheck="false"
 				EnableFunctionLevelLinking="true"
-				EnableEnhancedInstructionSet="1"
-				FloatingPointModel="2"
-				RuntimeTypeInfo="false"
 				WarningLevel="3"
-				DebugInformationFormat="0"
-				CompileAs="1"
+				DebugInformationFormat="3"
 				DisableSpecificWarnings="4996"
 			/>
 			<Tool
@@ -178,15 +166,12 @@
 				Name="VCCLCompilerTool"
 				Optimization="0"
 				AdditionalIncludeDirectories="../..;../../../../src/libmpg123"
-				PreprocessorDefinitions="WIN32;_CRT_SECURE_NO_WARNINGS;OPT_I386;REAL_IS_FLOAT;_DEBUG"
-				MinimalRebuild="false"
-				ExceptionHandling="0"
+				PreprocessorDefinitions="WIN32;_CRT_SECURE_NO_WARNINGS;OPT_I386;_DEBUG"
+				MinimalRebuild="true"
 				BasicRuntimeChecks="3"
 				RuntimeLibrary="3"
-				RuntimeTypeInfo="false"
 				WarningLevel="3"
 				DebugInformationFormat="3"
-				CompileAs="1"
 				DisableSpecificWarnings="4996"
 			/>
 			<Tool
@@ -243,15 +228,12 @@
 				Name="VCCLCompilerTool"
 				Optimization="0"
 				AdditionalIncludeDirectories="../..;../../../../src/libmpg123"
-				PreprocessorDefinitions="WIN32;_CRT_SECURE_NO_WARNINGS;REAL_IS_FLOAT;OPT_GENERIC;_DEBUG"
-				MinimalRebuild="false"
-				ExceptionHandling="0"
+				PreprocessorDefinitions="WIN32;_CRT_SECURE_NO_WARNINGS;OPT_GENERIC;_DEBUG"
+				MinimalRebuild="true"
 				BasicRuntimeChecks="3"
 				RuntimeLibrary="3"
-				RuntimeTypeInfo="false"
 				WarningLevel="3"
 				DebugInformationFormat="3"
-				CompileAs="1"
 				DisableSpecificWarnings="4996"
 			/>
 			<Tool
@@ -308,22 +290,13 @@
 			<Tool
 				Name="VCCLCompilerTool"
 				Optimization="2"
-				InlineFunctionExpansion="2"
 				EnableIntrinsicFunctions="true"
-				FavorSizeOrSpeed="1"
-				OmitFramePointers="true"
 				AdditionalIncludeDirectories="../..;../../../../src/libmpg123"
-				PreprocessorDefinitions="WIN32;_CRT_SECURE_NO_WARNINGS;REAL_IS_FLOAT;OPT_I386"
-				ExceptionHandling="0"
+				PreprocessorDefinitions="WIN32;_CRT_SECURE_NO_WARNINGS;OPT_I386"
 				RuntimeLibrary="2"
-				BufferSecurityCheck="false"
 				EnableFunctionLevelLinking="true"
-				EnableEnhancedInstructionSet="1"
-				FloatingPointModel="2"
-				RuntimeTypeInfo="false"
 				WarningLevel="3"
-				DebugInformationFormat="0"
-				CompileAs="1"
+				DebugInformationFormat="3"
 				DisableSpecificWarnings="4996"
 			/>
 			<Tool
@@ -380,22 +353,13 @@
 			<Tool
 				Name="VCCLCompilerTool"
 				Optimization="2"
-				InlineFunctionExpansion="2"
 				EnableIntrinsicFunctions="true"
-				FavorSizeOrSpeed="1"
-				OmitFramePointers="true"
 				AdditionalIncludeDirectories="../..;../../../../src/libmpg123"
-				PreprocessorDefinitions="WIN32;_CRT_SECURE_NO_WARNINGS;REAL_IS_FLOAT;OPT_GENERIC"
-				ExceptionHandling="0"
+				PreprocessorDefinitions="WIN32;_CRT_SECURE_NO_WARNINGS;OPT_GENERIC"
 				RuntimeLibrary="2"
-				BufferSecurityCheck="false"
 				EnableFunctionLevelLinking="true"
-				EnableEnhancedInstructionSet="1"
-				FloatingPointModel="2"
-				RuntimeTypeInfo="false"
 				WarningLevel="3"
-				DebugInformationFormat="0"
-				CompileAs="1"
+				DebugInformationFormat="3"
 				DisableSpecificWarnings="4996"
 			/>
 			<Tool
@@ -445,6 +409,38 @@
 		<File
 			RelativePath="..\..\..\..\src\libmpg123\dct64.c"
 			>
+			<FileConfiguration
+				Name="Debug_i486|Win32"
+				ExcludedFromBuild="true"
+				>
+				<Tool
+					Name="VCCLCompilerTool"
+				/>
+			</FileConfiguration>
+			<FileConfiguration
+				Name="Release_i486|Win32"
+				ExcludedFromBuild="true"
+				>
+				<Tool
+					Name="VCCLCompilerTool"
+				/>
+			</FileConfiguration>
+			<FileConfiguration
+				Name="Debug_i386|Win32"
+				ExcludedFromBuild="true"
+				>
+				<Tool
+					Name="VCCLCompilerTool"
+				/>
+			</FileConfiguration>
+			<FileConfiguration
+				Name="Release_i386|Win32"
+				ExcludedFromBuild="true"
+				>
+				<Tool
+					Name="VCCLCompilerTool"
+				/>
+			</FileConfiguration>
 		</File>
 		<File
 			RelativePath="..\..\..\..\src\libmpg123\dct64_i386.c"
@@ -507,7 +503,111 @@
 			>
 		</File>
 		<File
+			RelativePath="..\..\..\..\src\libmpg123\decode.c"
+			>
+			<FileConfiguration
+				Name="Debug_i486|Win32"
+				ExcludedFromBuild="true"
+				>
+				<Tool
+					Name="VCCLCompilerTool"
+				/>
+			</FileConfiguration>
+			<FileConfiguration
+				Name="Release_i486|Win32"
+				ExcludedFromBuild="true"
+				>
+				<Tool
+					Name="VCCLCompilerTool"
+				/>
+			</FileConfiguration>
+			<FileConfiguration
+				Name="Debug_i386|Win32"
+				ExcludedFromBuild="true"
+				>
+				<Tool
+					Name="VCCLCompilerTool"
+				/>
+			</FileConfiguration>
+			<FileConfiguration
+				Name="Release_i386|Win32"
+				ExcludedFromBuild="true"
+				>
+				<Tool
+					Name="VCCLCompilerTool"
+				/>
+			</FileConfiguration>
+		</File>
+		<File
 			RelativePath="..\..\..\..\src\libmpg123\decode.h"
+			>
+		</File>
+		<File
+			RelativePath="..\..\..\..\src\libmpg123\decode_2to1.c"
+			>
+		</File>
+		<File
+			RelativePath="..\..\..\..\src\libmpg123\decode_4to1.c"
+			>
+		</File>
+		<File
+			RelativePath="..\..\..\..\src\libmpg123\decode_i386.c"
+			>
+			<FileConfiguration
+				Name="Debug_Generic|Win32"
+				ExcludedFromBuild="true"
+				>
+				<Tool
+					Name="VCCLCompilerTool"
+				/>
+			</FileConfiguration>
+			<FileConfiguration
+				Name="Release_Generic|Win32"
+				ExcludedFromBuild="true"
+				>
+				<Tool
+					Name="VCCLCompilerTool"
+				/>
+			</FileConfiguration>
+		</File>
+		<File
+			RelativePath="..\..\..\..\src\libmpg123\decode_i486.c"
+			>
+			<FileConfiguration
+				Name="Debug_i386|Win32"
+				ExcludedFromBuild="true"
+				>
+				<Tool
+					Name="VCCLCompilerTool"
+				/>
+			</FileConfiguration>
+			<FileConfiguration
+				Name="Debug_Generic|Win32"
+				ExcludedFromBuild="true"
+				>
+				<Tool
+					Name="VCCLCompilerTool"
+				/>
+			</FileConfiguration>
+			<FileConfiguration
+				Name="Release_i386|Win32"
+				ExcludedFromBuild="true"
+				>
+				<Tool
+					Name="VCCLCompilerTool"
+				/>
+			</FileConfiguration>
+			<FileConfiguration
+				Name="Release_Generic|Win32"
+				ExcludedFromBuild="true"
+				>
+				<Tool
+					Name="VCCLCompilerTool"
+				/>
+			</FileConfiguration>
+		</File>
+		<File
+			RelativePath="..\..\..\..\src\libmpg123\decode_ntom.c"
 			>
 		</File>
 		<File
@@ -599,10 +699,6 @@
 			>
 		</File>
 		<File
-			RelativePath="..\..\..\..\src\libmpg123\ntom.c"
-			>
-		</File>
-		<File
 			RelativePath="..\..\..\..\src\libmpg123\optimize.c"
 			>
 		</File>
@@ -628,62 +724,6 @@
 		</File>
 		<File
 			RelativePath="..\..\..\..\src\libmpg123\stringbuf.c"
-			>
-		</File>
-		<File
-			RelativePath="..\..\..\..\src\libmpg123\synth.c"
-			>
-		</File>
-		<File
-			RelativePath="..\..\..\..\src\libmpg123\synth.h"
-			>
-		</File>
-		<File
-			RelativePath="..\..\..\..\src\libmpg123\synth_8bit.c"
-			>
-		</File>
-		<File
-			RelativePath="..\..\..\..\src\libmpg123\synth_i486.c"
-			>
-			<FileConfiguration
-				Name="Debug_i386|Win32"
-				ExcludedFromBuild="true"
-				>
-				<Tool
-					Name="VCCLCompilerTool"
-				/>
-			</FileConfiguration>
-			<FileConfiguration
-				Name="Debug_Generic|Win32"
-				ExcludedFromBuild="true"
-				>
-				<Tool
-					Name="VCCLCompilerTool"
-				/>
-			</FileConfiguration>
-			<FileConfiguration
-				Name="Release_i386|Win32"
-				ExcludedFromBuild="true"
-				>
-				<Tool
-					Name="VCCLCompilerTool"
-				/>
-			</FileConfiguration>
-			<FileConfiguration
-				Name="Release_Generic|Win32"
-				ExcludedFromBuild="true"
-				>
-				<Tool
-					Name="VCCLCompilerTool"
-				/>
-			</FileConfiguration>
-		</File>
-		<File
-			RelativePath="..\..\..\..\src\libmpg123\synth_real.c"
-			>
-		</File>
-		<File
-			RelativePath="..\..\..\..\src\libmpg123\synth_s32.c"
 			>
 		</File>
 		<File

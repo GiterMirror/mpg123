@@ -52,7 +52,6 @@ mpg123_SOURCES = \
 	term.c \
 	term.h \
 	wav.c \
-	wavhead.h \
 	xfermem.c \
 	xfermem.h
 
@@ -124,9 +123,6 @@ output/alsa.$(OBJEXT): output/alsa.c audio.h module.h
 	cd output && $(MAKE)
 
 output/hp.$(OBJEXT): output/hp.c audio.h module.h
-	cd output && $(MAKE)
-
-output/sndio.$(OBJEXT): output/sndio.c audio.h module.h
 	cd output && $(MAKE)
 
 

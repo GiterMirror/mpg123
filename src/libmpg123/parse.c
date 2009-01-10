@@ -459,10 +459,8 @@ init_resync:
 			int id3ret = 0;
 			id3ret = parse_new_id3(fr, newhead);
 			if     (id3ret < 0){ debug("need more?"); ret = id3ret; goto read_frame_bad; }
-#ifndef NO_ID3V2
 			else if(id3ret > 0){ debug("got ID3v2"); fr->metaflags  |= MPG123_NEW_ID3|MPG123_ID3; }
 			else debug("no useful ID3v2");
-#endif
 
 			fr->oldhead = 0;
 			goto read_again; /* Also in case of invalid ID3 tag (ret==0), try to get on track again. */
@@ -835,15 +833,12 @@ static int decode_header(mpg123_handle *fr,unsigned long newhead)
 
 	switch(fr->lay)
 	{
-#ifndef NO_LAYER1
 		case 1:
 			fr->do_layer = do_layer1;
 			fr->framesize  = (long) tabsel_123[fr->lsf][0][fr->bitrate_index] * 12000;
 			fr->framesize /= freqs[fr->sampling_frequency];
 			fr->framesize  = ((fr->framesize+fr->padding)<<2)-4;
 		break;
-#endif
-#ifndef NO_LAYER2
 		case 2:
 			fr->do_layer = do_layer2;
 			debug2("bitrate index: %i (%i)", fr->bitrate_index, tabsel_123[fr->lsf][1][fr->bitrate_index] );
@@ -851,8 +846,6 @@ static int decode_header(mpg123_handle *fr,unsigned long newhead)
 			fr->framesize /= freqs[fr->sampling_frequency];
 			fr->framesize += fr->padding - 4;
 		break;
-#endif
-#ifndef NO_LAYER3
 		case 3:
 			fr->do_layer = do_layer3;
 			if(fr->lsf)
@@ -866,10 +859,9 @@ static int decode_header(mpg123_handle *fr,unsigned long newhead)
 			fr->framesize  = (long) tabsel_123[fr->lsf][2][fr->bitrate_index] * 144000;
 			fr->framesize /= freqs[fr->sampling_frequency]<<(fr->lsf);
 			fr->framesize = fr->framesize + fr->padding - 4;
-		break;
-#endif 
+		break; 
 		default:
-			if(NOQUIET) error1("Layer type %i not supported in this build!", fr->lay); 
+			if(NOQUIET) error("unknown layer type (!!)"); 
 
 			return 0;
 	}
@@ -1009,4 +1001,29 @@ int get_songlen(mpg123_handle *fr,int no)
 
 	tpf = mpg123_tpf(fr);
 	return no*tpf;
+}
+
+
+
+/* take into account: channels, bytes per sample -- NOT resampling!*/
+off_t samples_to_bytes(mpg123_handle *fr , off_t s)
+{
+	return s
+#ifdef FLOATOUT
+		* 4
+#else
+		* ((fr->af.encoding & MPG123_ENC_16) ? 2 : 1)
+#endif
+		* fr->af.channels;
+}
+
+off_t bytes_to_samples(mpg123_handle *fr , off_t b)
+{
+	return b
+#ifdef FLOATOUT
+		/ 4
+#else
+		/ ((fr->af.encoding & MPG123_ENC_16) ? 2 : 1)
+#endif
+		/ fr->af.channels;
 }

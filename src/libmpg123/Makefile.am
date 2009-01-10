@@ -41,23 +41,28 @@ libmpg123_la_SOURCES = \
 	reader.h \
 	debug.h \
 	decode.h \
-	dct64.c \
-	synth.h \
-	synth_mono.h \
-	synth_ntom.h \
-	synth_8bit.h \
+	decode_2to1.c \
+	decode_4to1.c \
+	decode_ntom.c \
 	equalizer.c \
 	huffman.h \
+	icy.c \
 	icy.h \
+	icy2utf8.c \
 	icy2utf8.h \
-	id3.h \
 	id3.c \
+	id3.h \
 	true.h \
+	l2tables.h \
+	layer1.c \
+	layer2.c \
+	layer3.c \
 	getbits.h \
 	optimize.h \
 	optimize.c \
 	readers.c \
 	tabinit.c \
+	stringbuf.c \
 	libmpg123.c \
 	mpg123lib_intern.h \
 	mangle.h \
@@ -67,38 +72,29 @@ libmpg123_la_SOURCES = \
 	libmpg123.sym
 
 EXTRA_libmpg123_la_SOURCES = \
-	icy.c \
-	icy2utf8.c \
-	l2tables.h \
-	layer1.c \
-	layer2.c \
-	layer3.c \
 	dct36_3dnowext.S \
 	dct36_3dnow.S \
 	dct64_3dnowext.S \
 	dct64_3dnow.S \
 	dct64_altivec.c \
+	dct64.c \
 	dct64_i386.c \
 	dct64_i486.c \
 	dct64_mmx.S \
 	dct64_sse.S \
-	synth_3dnowext.S \
-	synth_3dnow.S \
-	synth_altivec.c \
-	synth_i486.c \
-	synth_i586_dither.S \
-	synth_i586.S \
-	synth_mmx.S \
-	synth_sse3d.h \
-	synth_sse.S \
-	ntom.c \
-	synth.c \
-	synth_8bit.c \
-	synth_real.c \
-	synth_s32.c \
+	decode_3dnowext.S \
+	decode_3dnow.S \
+	decode_altivec.c \
+	decode.c \
+	decode_i386.c \
+	decode_i486.c \
+	decode_i586_dither.S \
+	decode_i586.S \
+	decode_mmx.S \
+	decode_sse3d.h \
+	decode_sse.S \
 	equalizer_3dnow.S \
 	tabinit_mmx.S \
-	stringbuf.c \
 	getcpuflags.S
 
 # explicit preprocessing since mingw32 does not honor the big .S

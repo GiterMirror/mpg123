@@ -79,12 +79,6 @@
 #  define REAL_PRINTF "%f"
 #endif
 
-#ifndef REAL_IS_FIXED
-# if (defined SIZEOF_INT32_T) && (SIZEOF_INT32_T != 4)
-#  error "Bad 32bit types!!!"
-# endif
-#endif
-
 #ifndef DOUBLE_TO_REAL
 # define DOUBLE_TO_REAL(x)     (x)
 #endif
@@ -99,12 +93,6 @@
 #endif
 #ifndef REAL_MINUS_32768
 # define REAL_MINUS_32768      -32768.0
-#endif
-#ifndef REAL_PLUS_S32
-# define REAL_PLUS_S32 2147483647.0
-#endif
-#ifndef REAL_MINUS_S32
-# define REAL_MINUS_S32 -2147483648.0
 #endif
 #ifndef REAL_MUL
 # define REAL_MUL(x, y)                ((x) * (y))
@@ -127,19 +115,22 @@
 #define         MPG_MD_DUAL_CHANNEL     2
 #define         MPG_MD_MONO             3
 
-/* We support short or float output samples...
-   Short integer amplitude is scaled by this. */
-#define SHORT_SCALE 32768
-/* That scales a short-scaled value to a 32bit integer scaled one
-   value = 2**31/2**15 */
-#define S32_RESCALE 65536
+/* float output only for generic decoder! */
+#ifdef FLOATOUT
+#define MAXOUTBURST 1.0
+#define scale_t double
+#else
+/* I suspect that 32767 would be a better idea here, but Michael put this in... */
+#define MAXOUTBURST 32768
+#define scale_t long
+#endif
 
 /* Pre Shift fo 16 to 8 bit converter table */
 #define AUSHIFT (3)
 
-#include "optimize.h"
 #include "decode.h"
 #include "parse.h"
+#include "optimize.h"
 #include "frame.h"
 
 /* fr is a mpg123_handle* by convention here... */
@@ -151,8 +142,5 @@
 #define PVERB(mp, level) (!((mp)->flags & MPG123_QUIET) && (mp)->verbose >= (level))
 
 int decode_update(mpg123_handle *mh);
-/* residing in format.c  */
-off_t samples_to_bytes(mpg123_handle *fr , off_t s);
-off_t bytes_to_samples(mpg123_handle *fr , off_t b);
 
 #endif

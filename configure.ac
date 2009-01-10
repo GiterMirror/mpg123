@@ -10,8 +10,8 @@ AC_PREREQ(2.57)
 
 dnl ############# Initialisation
 
-AC_INIT([mpg123], [1.7.0], [mpg123-devel@lists.sourceforge.net])
-LIBMPG123_VERSION=13:0:13
+AC_INIT([mpg123], [1.6.3], [mpg123-devel@lists.sourceforge.net])
+LIBMPG123_VERSION=11:3:11
 AC_SUBST(LIBMPG123_VERSION)
 
 AC_CONFIG_SRCDIR(src/mpg123.c)
@@ -92,7 +92,7 @@ AC_ARG_ENABLE(modules,
 	fi
 ],
 [
-	if test "x$be_static" = "xyes"; then
+	if test "x$be_static" = "xyes" -o "x$with_cpu" = "xgeneric_float"; then
 		modules=disabled
 	else
 		# Per default no modules in Windows...
@@ -267,209 +267,10 @@ AC_ARG_ENABLE(network,
               ]
 )
 
-dnl Optional objects list, depends on decoder choice and core feature selection.
-dnl Not just for specific decoders anymore...
-s_fpu=
-DECODER_OBJ=
-DECODER_LOBJ=
-
-dnl Core features that can be disabled to reduce binary size.
-
-id3v2=enabled
-AC_ARG_ENABLE(id3v2,
-              [  --disable-id3v2=[no/yes] no ID3v2 parsing ],
-              [
-                if test "x$enableval" = xno; then
-                  id3v2="disabled"
-                fi
-              ], [])
-
-# id3v2 depends on strings... so check that in between.
-string=enabled
-AC_ARG_ENABLE(string,
-              [  --disable-string=[no/yes] no string API (this will disable ID3v2; main mpg123 won't build anymore) ],
-              [
-                if test "x$enableval" = xno; then
-                  string="disabled"
-                fi
-              ], [])
-
-if test "x$string" = "xdisabled"; then
-  AC_DEFINE(NO_STRING, 1, [ Define to disable string functions. ])
-  id3v2=disabled
- 	AC_MSG_WARN([ID3v2 support disabled because of string API being disabled.])
-else
-  DECODER_OBJ="$DECODER_OBJ stringbuf.\$(OBJEXT)"
-  DECODER_LOBJ="$DECODER_LOBJ stringbuf.lo"
-fi
-
-if test "x$id3v2" = "xdisabled"; then
-  AC_DEFINE(NO_ID3V2, 1, [ Define to disable ID3v2 parsing. ])
-fi
-
-icy=enabled
-AC_ARG_ENABLE(icy,
-              [  --disable-icy=[no/yes] no ICY metainfo parsing/conversion (main mpg123 won't build!) ],
-              [
-                if test "x$enableval" = xno; then
-                  icy="disabled"
-                fi
-              ], [])
-
-if test "x$icy" = "xdisabled"; then
-  AC_DEFINE(NO_ICY, 1, [ Define to disable ICY handling. ])
-else
-  DECODER_OBJ="$DECODER_OBJ icy.\$(OBJEXT) icy2utf8.\$(OBJEXT)"
-  DECODER_LOBJ="$DECODER_LOBJ icy.lo icy2utf8.lo"
-fi
-
-ntom=enabled
-AC_ARG_ENABLE(ntom,
-              [  --disable-ntom=[no/yes] no flexible resampling ],
-              [
-                if test "x$enableval" = xno; then
-                  ntom="disabled"
-                fi
-              ], [])
-
-if test "x$ntom" = "xdisabled"; then
-  AC_DEFINE(NO_NTOM, 1, [ Define to disable ntom resampling. ])
-else
-  DECODER_OBJ="$DECODER_OBJ ntom.\$(OBJEXT)"
-  DECODER_LOBJ="$DECODER_LOBJ ntom.lo"
-fi
-
-downsample=enabled
-AC_ARG_ENABLE(downsample,
-              [  --disable-downsample=[no/yes] no downsampled decoding ],
-              [
-                if test "x$enableval" = xno; then
-                  downsample="disabled"
-                fi
-              ], [])
-
-if test "x$downsample" = "xdisabled"; then
-  AC_DEFINE(NO_DOWNSAMPLE, 1, [ Define to disable downsampled decoding. ])
-fi
-
-int8=enabled
-AC_ARG_ENABLE(8bit,
-              [  --disable-8bit=[no/yes] no 8 bit integer output ],
-              [
-                if test "x$enableval" = xno; then
-                  int8="disabled"
-                fi
-              ], [])
-
-if test "x$int8" = "xdisabled"; then
-  AC_DEFINE(NO_8BIT, 1, [ Define to disable 8 bit integer output. ])
-else
-  DECODER_OBJ="$DECODER_OBJ synth_8bit.\$(OBJEXT)"
-  DECODER_LOBJ="$DECODER_LOBJ synth_8bit.lo"
-fi
-
-int16=enabled
-AC_ARG_ENABLE(16bit,
-              [  --disable-16bit=[no/yes] no 16 bit integer output ],
-              [
-                if test "x$enableval" = xno; then
-                  int16="disabled"
-                fi
-              ], [])
-
-if test "x$int16" = "xdisabled"; then
-  AC_DEFINE(NO_16BIT, 1, [ Define to disable 16 bit integer output. ])
-else
-  DECODER_OBJ="$DECODER_OBJ synth.\$(OBJEXT)"
-  DECODER_LOBJ="$DECODER_LOBJ synth.lo"
-fi
-int32=enabled
-AC_ARG_ENABLE(32bit,
-              [  --disable-32bit=[no/yes] no 32 bit integer output ],
-              [
-                if test "x$enableval" = xno; then
-                  int32="disabled"
-                fi
-              ], [])
-
-if test "x$int32" = "xdisabled"; then
-  AC_DEFINE(NO_32BIT, 1, [ Define to disable 32 bit integer output. ])
-else
-  s_fpu="$s_fpu synth_s32"
-fi
-
-real=enabled
-AC_ARG_ENABLE(real,
-              [  --disable-real=[no/yes] no real (floating point) output ],
-              [
-                if test "x$enableval" = xno; then
-                  real="disabled"
-                fi
-              ], [])
-
-if test "x$real" = "xdisabled"; then
-  AC_DEFINE(NO_REAL, 1, [ Define to disable real output. ])
-else
-  s_fpu="$s_fpu synth_real"
-fi
-
-layer1=enabled
-AC_ARG_ENABLE(layer1,
-              [  --disable-layer1=[no/yes] no layer I decoding ],
-              [
-                if test "x$enableval" = xno; then
-                  layer1="disabled"
-                fi
-              ], [])
-
-if test "x$layer1" = "xdisabled"; then
-  AC_DEFINE(NO_LAYER1, 1, [ Define to disable layer I. ])
-else
-  # layer1 needs code in layer2
-  DECODER_OBJ="$DECODER_OBJ layer1.\$(OBJEXT) layer2.\$(OBJEXT)"
-  DECODER_LOBJ="$DECODER_LOBJ layer1.lo layer2.lo"
-fi
-
-layer2=enabled
-AC_ARG_ENABLE(layer2,
-              [  --disable-layer2=[no/yes] no layer II decoding ],
-              [
-                if test "x$enableval" = xno; then
-                  layer2="disabled"
-                fi
-              ], [])
-
-if test "x$layer2" = "xdisabled"; then
-  AC_DEFINE(NO_LAYER2, 1, [ Define to disable layer II. ])
-else
-  # layer1 may have added the objects already
-  if test "x$layer1" = "xdisabled"; then
-    DECODER_OBJ="$DECODER_OBJ layer2.\$(OBJEXT)"
-    DECODER_LOBJ="$DECODER_LOBJ layer2.lo"
-  fi
-fi
-
-layer3=enabled
-AC_ARG_ENABLE(layer3,
-              [  --disable-layer3=[no/yes] no layer III decoding ],
-              [
-                if test "x$enableval" = xno; then
-                  layer3="disabled"
-                fi
-              ], [])
-
-if test "x$layer3" = "xdisabled"; then
-  AC_DEFINE(NO_LAYER3, 1, [ Define to disable layer III. ])
-else
-  DECODER_OBJ="$DECODER_OBJ layer3.\$(OBJEXT)"
-  DECODER_LOBJ="$DECODER_LOBJ layer3.lo"
-fi
-
 AC_ARG_WITH([cpu], [
   --with-cpu=generic[_fpu]      Use generic processor code with floating point arithmetic
-  --with-cpu=generic_float      Plain alias to generic_fpu now... float output is a normal runtime option!
+  --with-cpu=generic_float      A special build with generic fpu code that produces 32bit float output (experimental)
   --with-cpu=generic_nofpu      Use generic processor code with fixed point arithmetic (p.ex. ARM, experimental)
-  --with-cpu=generic_dither     Use generic processor code with floating point arithmetic and dithering for 1to1 16bit decoding.
   --with-cpu=i386[_fpu]         Use code optimized for i386 processors with floating point arithmetic
   --with-cpu=i386_nofpu         Use code optimized for i386 processors with fixed point arithmetic (experimental)
   --with-cpu=i486         Use code optimized for i486 processors (only usable alone!)
@@ -482,7 +283,7 @@ AC_ARG_WITH([cpu], [
   --with-cpu=mmx_alone          Really only MMX decoder, without i586 fallback for flexible rate
   --with-cpu=sse          Use code optimized for SSE processors
   --with-cpu=sse_alone          Really only SSE decoder, without i586 fallback for flexible rate
-  --with-cpu=x86          Pack all x86 opts into one binary (excluding i486 and dither)
+  --with-cpu=x86          Pack all x86 opts into one binary (excluding i486 and dithered i586)
   --with-cpu=x86_dither   Pack all x86 opts into one binary (excluding i486, including dither)
   --with-cpu=altivec      Use code optimized for Altivec processors (PowerPC G4 and G5)
 ]) 
@@ -507,7 +308,6 @@ AC_ARG_WITH([default-audio], [
   --with-default-audio=pulse      Use Pulse audio server as default audio output sub-system
   --with-default-audio=sdl        Use SDL as default audio output sub-system (Simple DirectMedia Layer)
   --with-default-audio=sgi        Use SGI as default audio output sub-system (IRIX)
-  --with-default-audio=sndio      Use OpenBSD's sndio as default audio output sub-system
   --with-default-audio=sun        Use Sun as default audio output sub-system (/dev/audio)
   --with-default-audio=arts       Use aRts as default audio output sub-system (KDE sound server)
 ])
@@ -599,12 +399,9 @@ AC_SUBST(LARGEFILE_SWITCH)
 AC_CHECK_TYPE(size_t, unsigned int)
 AC_CHECK_TYPE(ssize_t, int)
 AC_CHECK_TYPE(off_t,  long int)
-AC_CHECK_TYPE(int32_t, int)
-AC_CHECK_TYPE(uint32_t, unsigned int)
 AC_CHECK_SIZEOF(size_t,4)
 AC_CHECK_SIZEOF(ssize_t,4)
 AC_CHECK_SIZEOF(off_t,4)
-AC_CHECK_SIZEOF(int32_t)
 AC_CHECK_SIZEOF(long,4)
 
 dnl ############## Function Checks
@@ -698,6 +495,7 @@ if test x"$network" = xenabled; then
 	fi
 fi
 
+
 # Substitutions for the installable mpg123.h header
 if test "x$ac_cv_header_stdio_h" = "xyes"; then
 	INCLUDE_STDIO_H="#include <stdio.h>"
@@ -751,7 +549,7 @@ if test x"$debugging" = xenabled; then
 	if test x"$GCC" = xyes; then
 		ADD_CFLAGS="$ADD_CFLAGS -Wall -fno-strict-aliasing"
 		if test x"$nagging" = xenabled; then
-			ADD_CFLAGS="$ADD_CFLAGS -Werror -pedantic -DPLAIN_C89"
+			ADD_CFLAGS="$ADD_CFLAGS -Werror -pedantic"
 		fi
 	fi
 fi
@@ -863,58 +661,55 @@ if test "x$with_cpu" != "x"; then
 	cpu_type=$with_cpu
 fi
 
-s_altivec="synth_altivec dct64_altivec"
-s_i386="dct64_i386"
-s_i486="$s_i386 synth_i486 dct64_i486"
-s_i586="$s_i386 synth_i586"
-s_i586d="$s_i386 synth_i586_dither"
-s_dither="dnoise"
-s_3dnow="$s_i386 synth_3dnow dct64_3dnow equalizer_3dnow"
-s_3dnowext="$s_i386 dct64_3dnowext dct64_mmx tabinit_mmx synth_3dnowext"
-if test "x$layer3" = "xenabled"; then
-  s_3dnow="$s_3dnow dct36_3dnow"
-  s_3dnowext="$s_3dnowext dct36_3dnowext"
-fi
-s_mmx="$s_i386 dct64_mmx tabinit_mmx synth_mmx"
-s_sse="$s_i386 dct64_mmx tabinit_mmx dct64_sse synth_sse"
-s_x86multi="getcpuflags"
+
+s_gen="decode dct64"
+s_altivec="decode_altivec dct64_altivec"
+s_i386="decode_i386 dct64_i386"
+s_i486="$s_i386 decode_i486 dct64_i486"
+s_i586="$s_i386 decode_i586"
+s_i586d="$s_i386 decode_i586_dither dnoise"
+s_3dnow="$s_i386 decode_3dnow dct64_3dnow dct36_3dnow equalizer_3dnow"
+s_3dnowext="decode_i386 dct64_3dnowext dct36_3dnowext dct64_mmx tabinit_mmx decode_3dnowext"
+s_mmx="decode_i386 dct64_mmx tabinit_mmx decode_mmx"  # doesn't need dct64_i386
+s_sse="decode_i386 dct64_mmx tabinit_mmx dct64_sse decode_sse"
+s_multi="getcpuflags"
 
 dnl CPU specific compiler flags and sources
 case $cpu_type in
   generic)
     ADD_CPPFLAGS="$ADD_CPPFLAGS -DOPT_GENERIC -DREAL_IS_FLOAT"
-    more_sources="$s_fpu"
+    more_sources="$s_gen"
     ccalign=no
   ;;
-  generic_dither)
-    ADD_CPPFLAGS="$ADD_CPPFLAGS -DOPT_GENERIC_DITHER -DREAL_IS_FLOAT"
-    more_sources="$s_fpu $s_dither"
+  generic_float)
+    ADD_CPPFLAGS="$ADD_CPPFLAGS -DOPT_GENERIC -DFLOATOUT -DREAL_IS_FLOAT"
+    buffer=disabled
+    more_sources="$s_gen"
     ccalign=no
   ;;
-dnl Not disabling buffer for float mode... check that this is OK now!
-  generic_fpu | generic_float)
+  generic_fpu)
     ADD_CPPFLAGS="$ADD_CPPFLAGS -DOPT_GENERIC -DREAL_IS_FLOAT"
-    more_sources="$s_fpu"
+    more_sources="$s_gen"
     ccalign=no
   ;;
   generic_nofpu)
     ADD_CPPFLAGS="$ADD_CPPFLAGS -DOPT_GENERIC -DREAL_IS_FIXED"
-    more_sources=
+    more_sources="$s_gen"
     ccalign=no
   ;;
   altivec)
     ADD_CFLAGS="$ADD_CFLAGS -maltivec -faltivec"
     ADD_CPPFLAGS="$ADD_CPPFLAGS -DREAL_IS_FLOAT -DOPT_ALTIVEC"
-    more_sources="$s_altivec $s_fpu"
+    more_sources="$s_altivec"
   ;;
   i386) 
     ADD_CPPFLAGS="$ADD_CPPFLAGS -DOPT_I386 -DREAL_IS_FLOAT"
-    more_sources="$s_fpu $s_i386"
+    more_sources="$s_i386"
     ccalign=no
   ;;
   i386_fpu) 
     ADD_CPPFLAGS="$ADD_CPPFLAGS -DOPT_I386 -DREAL_IS_FLOAT"
-    more_sources="$s_fpu $s_i386"
+    more_sources="$s_i386"
     ccalign=no
   ;;
   i386_nofpu) 
@@ -924,49 +719,56 @@ dnl Not disabling buffer for float mode... check that this is OK now!
   ;;
   i486) 
     ADD_CPPFLAGS="$ADD_CPPFLAGS -DOPT_I486 -DREAL_IS_FLOAT"
-    more_sources="$s_fpu $s_i486"
+    more_sources="$s_i486"
     ccalign=no
   ;;
   i586) 
     ADD_CPPFLAGS="$ADD_CPPFLAGS -DOPT_I586 -DREAL_IS_FLOAT"
-    more_sources="$s_fpu $s_i586"
+    more_sources="$s_i586"
   ;;
   i586_dither) 
     ADD_CPPFLAGS="$ADD_CPPFLAGS -DOPT_I586_DITHER -DREAL_IS_FLOAT"
-    more_sources="$s_fpu $s_i586d $s_dither"
+    more_sources="$s_i586d"
   ;;
   3dnow)
-    # legacy 3dnow had the 3dnow paired with i586...
+    # legacy 3dnow had the 3dnow optional... keeping that
     ADD_CPPFLAGS="$ADD_CPPFLAGS -DOPT_MULTI -DOPT_I586 -DOPT_3DNOW -DREAL_IS_FLOAT"
-    more_sources="$s_fpu $s_i586 $s_3dnow $s_x86multi "
-  ;;
-  3dnow_alone)
-    ADD_CPPFLAGS="$ADD_CPPFLAGS -DOPT_3DNOW -DREAL_IS_FLOAT"
-    more_sources="$s_fpu $s_3dnow"
+    more_sources="$s_i586 $s_3dnow $s_multi "
   ;;
   3dnowext_alone) 
     ADD_CPPFLAGS="$ADD_CPPFLAGS -DOPT_3DNOWEXT -DREAL_IS_FLOAT"
-    more_sources="$s_fpu $s_3dnowext"
+    more_sources="$s_3dnowext"
   ;;
   3dnowext) 
+    AC_MSG_WARN([Combining 3DNowExt decoder with 3DNow for flexible rate, use 3dnowext_alone if you do not want this.])
     ADD_CPPFLAGS="$ADD_CPPFLAGS -DOPT_MULTI -DOPT_3DNOW -DOPT_3DNOWEXT -DREAL_IS_FLOAT"
-    more_sources="$s_fpu $s_3dnowext $s_3dnow $s_x86multi"
+    more_sources="$s_3dnowext $s_3dnow $s_multi"
   ;;
-  mmx_alone|mmx) 
+  mmx_alone) 
     ADD_CPPFLAGS="$ADD_CPPFLAGS -DOPT_MMX -DREAL_IS_FLOAT"
-    more_sources="$s_fpu $s_mmx"
+    more_sources="$s_mmx"
   ;;
-  sse_alone|sse) 
+  mmx)
+    AC_MSG_WARN([Combining MMX decoder with i586 for flexible rate, use mmx_alone if you do not want this.])
+    ADD_CPPFLAGS="$ADD_CPPFLAGS -DOPT_MULTI -DOPT_I586 -DOPT_MMX -DREAL_IS_FLOAT"
+    more_sources="$s_mmx $s_i586 $s_multi"
+  ;;
+  sse) 
+    AC_MSG_WARN([Combining SSE decoder with i586 for flexible rate, use sse_alone if you do not want this.])
+    ADD_CPPFLAGS="$ADD_CPPFLAGS -DOPT_MULTI -DOPT_I586 -DOPT_SSE -DREAL_IS_FLOAT"
+    more_sources="$s_sse $s_i586 $s_multi"
+  ;;
+  sse_alone) 
     ADD_CPPFLAGS="$ADD_CPPFLAGS -DOPT_SSE -DREAL_IS_FLOAT"
-    more_sources="$s_fpu $s_sse"
+    more_sources="$s_sse"
   ;;
   x86) 
     ADD_CPPFLAGS="$ADD_CPPFLAGS -DOPT_MULTI -DOPT_GENERIC -DOPT_I386 -DOPT_I586 -DOPT_MMX -DOPT_3DNOW -DOPT_3DNOWEXT -DOPT_SSE -DREAL_IS_FLOAT"
-    more_sources="$s_fpu $s_i386 $s_i586 $s_mmx $s_3dnow $s_3dnowext $s_sse $s_x86multi"
+    more_sources="$s_gen $s_i386 $s_i586 $s_mmx $s_3dnow $s_3dnowext $s_sse $s_multi"
  ;;
   x86_dither) 
-    ADD_CPPFLAGS="$ADD_CPPFLAGS -DOPT_MULTI -DOPT_GENERIC -DOPT_GENERIC_DITHER -DOPT_I386 -DOPT_I586 -DOPT_I586_DITHER -DOPT_MMX -DOPT_3DNOW -DOPT_3DNOWEXT -DOPT_SSE -DREAL_IS_FLOAT"
-    more_sources="$s_fpu $s_i386 $s_i586 $s_i586d $s_dither $s_mmx $s_3dnow $s_3dnowext $s_sse $s_x86multi"
+    ADD_CPPFLAGS="$ADD_CPPFLAGS -DOPT_MULTI -DOPT_GENERIC -DOPT_I386 -DOPT_I586 -DOPT_I586_DITHER -DOPT_MMX -DOPT_3DNOW -DOPT_3DNOWEXT -DOPT_SSE -DREAL_IS_FLOAT"
+    more_sources="$s_gen $s_i386 $s_i586 $s_i586d $s_mmx $s_3dnow $s_3dnowext $s_sse $s_multi"
   ;;
   *)
   	AC_MSG_ERROR([Unknown CPU type '$cpu_type'])
@@ -991,7 +793,7 @@ fi
 dnl ############## Output module choice
 
 # The full list of supported modules to check, first come, first serve.
-check_modules="alsa oss coreaudio sndio sun win32 esd jack portaudio pulse sdl nas arts dummy"
+check_modules="alsa oss coreaudio sun win32 esd jack portaudio pulse sdl nas arts dummy"
 # The final list.
 output_modules=
 
@@ -1001,6 +803,11 @@ if test "x$with_audio" != "x"; then
 	check_modules="`echo $with_audio|tr , ' '` dummy"
 	echo "Limiting outputs to build according to your preference: $check_modules"
 	check_forced=yes
+fi
+
+if test x"$cpu_type" = xgeneric_float; then
+	check_modules="dummy"
+	AC_MSG_WARN( [Forcing dummy output (decoding to wav/stdout only) with float samples, as the audio device system cannot handle floats.] )
 fi
 
 PKG_PROG_PKG_CONFIG([])
@@ -1105,17 +912,6 @@ do
 			# AC_CHECK_LIB( [winmm], [waveOutOpen] )
 			WIN32_LIBS=-lwinmm
 			AC_CHECK_HEADERS([windows.h], output_modules="$output_modules win32" HAVE_WIN32=yes, HAVE_WIN32=no check_failed=yes)
-		;;
-		sndio)
-			SNDIO_LIBS=-lsndio
-			AC_CHECK_LIB([sndio], [sio_open],
-				[AC_CHECK_HEADERS([sndio.h],
-					[output_modules="$output_modules sndio" HAVE_SNDIO="yes"])
-				]
-			)
-			if test "x$HAVE_SNDIO" != xyes; then
-				check_failed=yes
-			fi
 		;;
 		sun)
 			AC_CHECK_HEADERS([sun/audioio.h sys/audioio.h asm/audioio.h sys/audio.h])
@@ -1224,7 +1020,7 @@ if test "x$check_forced" = xyes -a "x$check_failed" = "xyes"; then
 fi
 
 # When you extend check_modules, you should extend this:
-#for i in alsa oss coreaudio sndio sun win32 esd jack portaudio pulse sdl nas aix alib arts hp os2 sgi mint dummy; do echo $i; done |
+#for i in alsa oss coreaudio sun win32 esd jack portaudio pulse sdl nas aix alib arts hp os2 sgi mint dummy; do echo $i; done |
 #perl -ne 'chomp; $big = uc($_); print <<EOT;
 #AC_SUBST(${big}_LIBS)
 #AC_SUBST(${big}_LDFLAGS)
@@ -1244,10 +1040,6 @@ AC_SUBST(COREAUDIO_LIBS)
 AC_SUBST(COREAUDIO_LDFLAGS)
 AC_SUBST(COREAUDIO_CFLAGS)
 AM_CONDITIONAL( [HAVE_COREAUDIO], [test "x$HAVE_COREAUDIO" = xyes] )
-AC_SUBST(SNDIO_LIBS)
-AC_SUBST(SNDIO_LDFLAGS)
-AC_SUBST(SNDIO_CFLAGS)
-AM_CONDITIONAL( [HAVE_SNDIO], [test "x$HAVE_SNDIO" = xyes] )
 AC_SUBST(SUN_LIBS)
 AC_SUBST(SUN_LDFLAGS)
 AC_SUBST(SUN_CFLAGS)
@@ -1340,7 +1132,7 @@ then
 	# That feels stupid... what about hashed arrays?
 	case $OUTPUT_MOD in
 	# Here's a script for that tedious list, perhaps to be outsourced together with the one in src/output/Makefile.am
-#for i in alsa coreaudio esd jack nas oss portaudio pulse sdl sndio sun win32 aix alib arts hp os2 sgi mint; do echo $i; done |
+#for i in alsa coreaudio esd jack nas oss portaudio pulse sdl sun win32 aix alib arts hp os2 sgi mint; do echo $i; done |
 #perl -ne 'chomp; $big = uc($_); print <<EOT;
 #		$_)
 #			OUTPUT_LIBS="\$${big}_LIBS"
@@ -1393,11 +1185,6 @@ then
 			OUTPUT_LIBS="$SDL_LIBS"
 			OUTPUT_LDFLAGS="$SDL_LDFLAGS"
 			OUTPUT_CFLAGS="$SDL_CFLAGS"
-		;;
-		sndio)
-			OUTPUT_LIBS="$SNDIO_LIBS"
-			OUTPUT_LDFLAGS="$SNDIO_LDFLAGS"
-			OUTPUT_CFLAGS="$SNDIO_CFLAGS"
 		;;
 		sun)
 			OUTPUT_LIBS="$SUN_LIBS"
@@ -1575,25 +1362,7 @@ if test x"$aligncheck" = xenabled; then
 		echo "   (note that newer gcc 4.x versions do not use/need the align check)"
 	fi
 fi
-echo -n "
-  Core libmpg123 features:
-  Layer I ................. $layer1
-  Layer II ................ $layer2
-  Layer III ............... $layer3
-  NtoM resampling ......... $ntom
-  downsampled decoding .... $downsample
-  Posix file input ........ $fileio
-  Feeder input ............ $feeder
-  Callback input .......... $callback
-  ID3v2 parsing ........... $id3v2
-  String API .............. $string
-  ICY parsing/conversion .. $icy
-  Output formats (nofpu will disable all but 16 or 8 bit!):
-  8 bit integer ........... $int8
-  16 bit integer .......... $int16
-  32 bit integer .......... $int32
-  real (32 bit float) ..... $real
-"
+
 # just an empty line
 echo
 
@@ -1601,9 +1370,14 @@ if test x"$modules" = xenabled; then
 	echo "  Modules Directory ....... $pkglibdir"
 fi
 echo "  Checked audio modules ... $check_modules
-  Detected audio support ..$output_modules
+  Detected audio support .. $output_modules
   Default output module ... $default_output_module
 "
+if test x"$cpu_type" = xgeneric_float; then
+	echo "You chose the generic build with 32bit float output.
+That means output via -s, -O or -w to a file/pipe and no buffer.
+"
+fi
 if test x"$modules" = xdisabled; then
 echo "The _single_ active output module is being statically linked in.
 "
@@ -1624,3 +1398,5 @@ if test x"$debugging" = xenabled; then
 else
     echo "Next type 'make' and then 'make install'."
 fi
+
+

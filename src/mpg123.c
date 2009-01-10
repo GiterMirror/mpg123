@@ -110,7 +110,6 @@ struct parameter param = {
 	,0 /* keep_open */
 	,0 /* force_utf8 */
 	,INDEX_SIZE
-	,NULL /* force_encoding */
 };
 
 mpg123_handle *mh = NULL;
@@ -357,14 +356,17 @@ topt opts[] = {
 /*	{'g', "gain",        GLO_ARG | GLO_LONG, 0, &ao.gain,    0}, FIXME */
 	{'r', "rate",        GLO_ARG | GLO_LONG, 0, &param.force_rate,  0},
 	{0,   "8bit",        GLO_INT,  set_frameflag, &frameflag, MPG123_FORCE_8BIT},
-	{0,   "float",       GLO_INT,  set_frameflag, &frameflag, MPG123_FORCE_FLOAT},
 	{0,   "headphones",  0,                  set_output_h, 0,0},
 	{0,   "speaker",     0,                  set_output_s, 0,0},
 	{0,   "lineout",     0,                  set_output_l, 0,0},
 	{'o', "output",      GLO_ARG | GLO_CHAR, set_output, 0,  0},
 	{0,   "list-modules",0,        list_modules, NULL,  0}, 
 	{'a', "audiodevice", GLO_ARG | GLO_CHAR, 0, &param.output_device,  0},
+#ifdef FLOATOUT
+	{'f', "scale",       GLO_ARG | GLO_DOUBLE, 0, &param.outscale,   0},
+#else
 	{'f', "scale",       GLO_ARG | GLO_LONG, 0, &param.outscale,   0},
+#endif
 	{'n', "frames",      GLO_ARG | GLO_LONG, 0, &param.frame_number,  0},
 	#ifdef HAVE_TERMIOS
 	{'C', "control",     GLO_INT,  0, &param.term_ctrl, TRUE},
@@ -438,7 +440,6 @@ topt opts[] = {
 	{0, "fuzzy", GLO_INT,  set_frameflag, &frameflag, MPG123_FUZZY},
 	{0, "index-size", GLO_ARG|GLO_LONG, 0, &param.index_size, 0},
 	{0, "no-seekbuffer", GLO_INT, unset_frameflag, &frameflag, MPG123_SEEKBUFFER},
-	{'e', "encoding", GLO_ARG|GLO_CHAR, 0, &param.force_encoding, 0},
 	{0, 0, 0, 0, 0, 0}
 };
 
@@ -716,7 +717,11 @@ int main(int argc, char *argv[])
 	mpg123_getpar(mp, MPG123_RVA, &param.rva, NULL);
 	mpg123_getpar(mp, MPG123_DOWNSPEED, &param.halfspeed, NULL);
 	mpg123_getpar(mp, MPG123_UPSPEED, &param.doublespeed, NULL);
+#ifdef FLOATOUT
+	mpg123_getpar(mp, MPG123_OUTSCALE, NULL, &param.outscale);
+#else
 	mpg123_getpar(mp, MPG123_OUTSCALE, &param.outscale, NULL);
+#endif
 	mpg123_getpar(mp, MPG123_FLAGS, &parr, NULL);
 	param.flags = (int) parr;
 	param.flags |= MPG123_SEEKBUFFER; /* Default on, for HTTP streams. */
@@ -744,7 +749,7 @@ int main(int argc, char *argv[])
 
 	if(param.list_cpu)
 	{
-		const char **all_dec = mpg123_decoders();
+		char **all_dec = mpg123_decoders();
 		printf("Builtin decoders:");
 		while(*all_dec != NULL){ printf(" %s", *all_dec); ++all_dec; }
 		printf("\n");
@@ -753,7 +758,7 @@ int main(int argc, char *argv[])
 	}
 	if(param.test_cpu)
 	{
-		const char **all_dec = mpg123_supported_decoders();
+		char **all_dec = mpg123_supported_decoders();
 		printf("Supported decoders:");
 		while(*all_dec != NULL){ printf(" %s", *all_dec); ++all_dec; }
 		printf("\n");
@@ -817,8 +822,13 @@ int main(int argc, char *argv[])
 	    && ++libpar
 	    && MPG123_OK == (result = mpg123_par(mp, MPG123_TIMEOUT, param.timeout, 0))
 #endif
+#ifdef FLOATOUT
+	    && ++libpar
+	    && MPG123_OK == (result = mpg123_par(mp, MPG123_OUTSCALE, 0, param.outscale))
+#else
 	    && ++libpar
 	    && MPG123_OK == (result = mpg123_par(mp, MPG123_OUTSCALE, param.outscale, 0))
+#endif
 			))
 	{
 		error2("Cannot set library parameter %i: %s", libpar, mpg123_plain_strerror(result));
@@ -1067,7 +1077,7 @@ static void usage(int err)  /* print syntax & exit */
 	fprintf(o,"   -w <filename> write Output as WAV file\n");
 	fprintf(o,"   -k n  skip first n frames [0]        -n n  decode only n frames [all]\n");
 	fprintf(o,"   -c    check range violations         -y    DISABLE resync on errors\n");
-	fprintf(o,"   -b n  output buffer: n Kbytes [0]    -f n  change scalefactor [%li]\n", param.outscale);
+	fprintf(o,"   -b n  output buffer: n Kbytes [0]    -f n  change scalefactor [%g]\n", (double)param.outscale);
 	fprintf(o,"   -r n  set/force samplerate [auto]    -g n  set audio hardware output gain\n");
 	fprintf(o,"   -os,-ol,-oh  output to built-in speaker,line-out connector,headphones\n");
 	#ifdef NAS
@@ -1101,7 +1111,6 @@ static void want_usage(char* arg)
 
 static void long_usage(int err)
 {
-	char *enclist;
 	FILE* o = stdout;
 	if(err)
 	{
@@ -1153,7 +1162,7 @@ static void long_usage(int err)
 	fprintf(o,"        --no-3dnow         force use of floating-pointer routine (obsoleted by --cpu)\n");
 	#endif
 	fprintf(o," -g     --gain             set audio hardware output gain\n");
-	fprintf(o," -f <n> --scale <n>        scale output samples (soft gain - based on 32768), default=%li)\n", param.outscale);
+	fprintf(o," -f <n> --scale <n>        scale output samples (soft gain, default=%g)\n", (double)param.outscale);
 	fprintf(o,"        --rva-mix,\n");
 	fprintf(o,"        --rva-radio        use RVA2/ReplayGain values for mix/radio mode\n");
 	fprintf(o,"        --rva-album,\n");
@@ -1167,9 +1176,6 @@ static void long_usage(int err)
 	fprintf(o," -4     --4to1             4:1 downsampling\n");
   fprintf(o,"        --pitch <value>    set hardware pitch (speedup/down, 0 is neutral; 0.05 is 5%%)\n");
 	fprintf(o,"        --8bit             force 8 bit output\n");
-	fprintf(o,"        --float            force floating point output (internal precision)\n");
-	audio_enclist(&enclist);
-	fprintf(o," -e <c> --encoding <c>     force a specific encoding c (%s)\n", enclist != NULL ? enclist : "OOM!");
 	fprintf(o," -d n   --doublespeed n    play only every nth frame\n");
 	fprintf(o," -h n   --halfspeed   n    play every frame n times\n");
 	fprintf(o,"        --equalizer        exp.: scales freq. bands acrd. to 'equalizer.dat'\n");

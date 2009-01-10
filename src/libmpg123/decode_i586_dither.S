@@ -25,7 +25,7 @@
 	.long 0x0,0xc0e00000
 	ALIGN8
 .text
-/* int synth_1to1_i586_asm_dither(real *bandPtr, int channel, unsigned char *out, unsigned char *buffs, int bo_and_ditherindex[2], real *decwin, real* dithernoise); */
+/* int synth_1to1_i586_asm_dither(real *bandPtr, int channel, unsigned char *out, unsigned char *buffs, int bo_and_ditherindex[2], real *decwin); */
 .globl ASM_NAME(synth_1to1_i586_asm_dither)
 ASM_NAME(synth_1to1_i586_asm_dither):
 	subl $16,%esp
@@ -33,23 +33,17 @@ ASM_NAME(synth_1to1_i586_asm_dither):
 	pushl %edi
 	pushl %esi
 	pushl %ebx
-/* stack: 0(%esp)=%ebx 4=esi 8=edi 12=ebp 16,20,24,28=local 32=back 36=bandptr 40=channel 44=out 48=buffs 52=bo 56=decwin 60=dithernoise */
+/* stack: 0(%esp)=%ebx 4=esi 8=edi 12=ebp 16,20,24,28=local 32=back 36=bandptr 40=channel 44=out 48=buffs 52=bo 56=decwin */
 #define BANDPTR 36(%esp)
 #define CHANNEL 40(%esp)
 #define OUT     44(%esp)
 #define BUFFS   48(%esp)
 #define BO      52(%esp)
 #define DECWIN  56(%esp)
-#define DITHERNOISE 60(%esp)
-/*#define DITHERNOISE $(ASM_NAME(dithernoise))*/
 #define LOC0    16(%esp)
 #define LOC1    20(%esp)
 #define LOC2    24(%esp)
 #define DITHERINDEX  28(%esp)
-/* During application of the dithering, we need the shifted locations because there's an additional value on the stack. */
-#define DITHERNOISE2 64(%esp)
-#define DITHERINDEX2 32(%esp)
-
 	movl BANDPTR,%eax
 	movl OUT,%esi
 	movl BO, %ebx
@@ -101,7 +95,7 @@ ASM_NAME(synth_1to1_i586_asm_dither):
 	call ASM_NAME(dct64_i386)
 	addl $12,%esp
 /* Now removed the parameters.
-   stack: 0(%esp)=%ebx 4=esi 8=edi 12=ebp 16,20,24,28=local 32=back 36=bandptr 40=channel 44=out 48=buffs 52=bo 56=decwin 60=dithernoise */
+   stack: 0(%esp)=%ebx 4=esi 8=edi 12=ebp 16,20,24,28=local 32=back 36=bandptr 40=channel 44=out 48=buffs 52=bo */
 	movl LOC0,%edx
 	leal 0(,%edx,4),%edx
 	/* movl $ASM_NAME(decwin)+64,%eax */
@@ -176,10 +170,10 @@ ASM_NAME(synth_1to1_i586_asm_dither):
 	fxch %st(1)
 	fsubrp %st,%st(1)
 
-	addl $4,DITHERINDEX2
-	andl $0x0003fffc,DITHERINDEX2
-	movl DITHERNOISE2,%edi
-	addl DITHERINDEX2,%edi	
+	addl $4,DITHERINDEX
+	andl $0x0003fffc,DITHERINDEX
+	movl $ASM_NAME(dithernoise),%edi
+	addl DITHERINDEX,%edi	
 
 	fadd (%edi)
 
@@ -236,10 +230,10 @@ ASM_NAME(synth_1to1_i586_asm_dither):
 	fxch %st(1)
 	faddp %st,%st(1)
 
-	addl $4,DITHERINDEX2
-	andl $0x0003fffc,DITHERINDEX2
-	movl DITHERNOISE2,%edi
-	addl DITHERINDEX2,%edi	
+	addl $4,DITHERINDEX
+	andl $0x0003fffc,DITHERINDEX
+	movl $ASM_NAME(dithernoise),%edi
+	addl DITHERINDEX,%edi	
 
 	fadd (%edi)
 /* fistpl and popl as a unit keep the stack unchanged */
@@ -330,10 +324,10 @@ ASM_NAME(synth_1to1_i586_asm_dither):
 	fxch %st(1)
 	fsubrp %st,%st(1)
 
-	addl $4,DITHERINDEX2
-	andl $0x0003fffc,DITHERINDEX2
-	movl DITHERNOISE2,%edi
-	addl DITHERINDEX2,%edi	
+	addl $4,DITHERINDEX
+	andl $0x0003fffc,DITHERINDEX
+	movl $ASM_NAME(dithernoise),%edi
+	addl DITHERINDEX,%edi	
 
 	fadd (%edi)
 /* fistpl and popl as a unit keep the stack unchanged */

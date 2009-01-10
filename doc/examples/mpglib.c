@@ -6,16 +6,8 @@
 	initially written by Thomas Orgis
 */
 
-#include <mpg123.h>
-
-/* unistd.h is not available under MSVC, 
- io.h defines the read and write functions */
-#ifndef _MSC_VER
+#include "mpg123.h"
 #include <unistd.h>
-#else
-#include <io.h>
-#endif
-
 #include <stdio.h>
 
 #define INBUFF  16384
@@ -81,3 +73,4 @@ int main(int argc, char **argv)
 	mpg123_exit();
 	return 0;
 }
+

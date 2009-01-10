@@ -273,7 +273,7 @@ void print_id3_tag(mpg123_handle *mh, int long_id3, FILE *out)
 	for(ti=0; ti<FIELDS; ++ti) mpg123_free_string(&tag[ti]);
 }
 
-void print_icy(mpg123_handle *mh, FILE *outstream)
+void print_icy(mpg123_handle *mh, FILE *out)
 {
 	char* icy;
 	if(MPG123_OK == mpg123_icy(mh, &icy))
@@ -290,7 +290,7 @@ void print_icy(mpg123_handle *mh, FILE *outstream)
 
 				transform(&out, &in);
 				if(out.fill)
-				fprintf(outstream, "\nICY-META: %s\n", out.p);
+				fprintf(stderr, "\nICY-META: %s\n", out.p);
 
 				mpg123_free_string(&out);
 			}
