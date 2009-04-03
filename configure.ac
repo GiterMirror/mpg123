@@ -10,8 +10,8 @@ AC_PREREQ(2.57)
 
 dnl ############# Initialisation
 
-AC_INIT([mpg123], [1.8.0], [mpg123-devel@lists.sourceforge.net])
-LIBMPG123_VERSION=15:1:15
+AC_INIT([mpg123], [1.7.0], [mpg123-devel@lists.sourceforge.net])
+LIBMPG123_VERSION=14:2:14
 AC_SUBST(LIBMPG123_VERSION)
 
 AC_CONFIG_SRCDIR(src/mpg123.c)
@@ -517,10 +517,8 @@ AC_ARG_WITH([cpu], [
   --with-cpu=sse_alone          Really only SSE decoder, without i586 fallback for flexible rate
   --with-cpu=x86          Pack all x86 opts into one binary (excluding i486 and dither)
   --with-cpu=x86_dither   Pack all x86 opts into one binary (excluding i486, including dither)
-  --with-cpu=x86-64       Use code optimized for x86-64 processors (AMD64 and Intel64)
-  --with-cpu=x86-64_dither x86-64 code together with generic dithering (runtime selection)
   --with-cpu=altivec      Use code optimized for Altivec processors (PowerPC G4 and G5)
-])
+]) 
 
 AC_ARG_WITH([audio], [
   --with-audio=<list of modules>  Select a list (or only one) of audio output modules (comma or space separated list).
@@ -822,17 +820,11 @@ case $target in
   i686-*-linux*|i686-*-kfreebsd*-gnu)
     cpu_type="x86"
   ;;
-  x86_64-*-linux*|x86_64-*-kfreebsd*-gnu)
-    cpu_type="x86-64"
-  ;;
   *-*-linux*|*-*-kfreebsd*-gnu)
     cpu_type="generic_fpu"
   ;;
   i686-apple-darwin*)
     cpu_type="x86"
-  ;;
-  x86_64-apple-darwin*)
-    cpu_type="x86-64"
   ;;
   *-apple-darwin*)
     AC_MSG_CHECKING([if CPU type supports AltiVec])
@@ -850,9 +842,6 @@ case $target in
   i?86-*-dragonfly* | i?86-*-freebsd* | i?86-*-midnightbsd* | i?86-*-mirbsd* | i?86-*-netbsd* | i?86-*-openbsd*)
     cpu_type="x86"
   ;;
-  x86_64-*-dragonfly* | x86_64-*-freebsd* | x86_64-*-midnightbsd* | x86_64-*-mirbsd* | x86_64-*-netbsd* | x86_64-*-openbsd*)
-    cpu_type="x86-64"
-  ;;
   *-*-dragonfly* | *-*-freebsd* | *-*-midnightbsd* | *-*-mirbsd* | *-*-netbsd* | *-*-openbsd*)
     cpu_type="generic_fpu"
   ;;
@@ -861,9 +850,6 @@ case $target in
   ;;
   *-dec-osf*)
     cpu_type="generic_fpu"
-  ;;
-  x86_64-pc-cygwin*)
-    cpu_type="x86-64"
   ;;
   i686-pc-cygwin*)
     cpu_type="x86"
@@ -909,12 +895,6 @@ case $target in
 		buffer=disabled
 		ADD_CPPFLAGS="-DGENERIC $ADD_CPPFLAGS"
 	;;
-	x86_64-*)
-		AC_MSG_WARN([Unknown target operating system])
-		cpu_type="x86-64"
-		buffer=disabled
-		ADD_CPPFLAGS="-DGENERIC $ADD_CPPFLAGS"
-	;;
   *)
   	AC_MSG_WARN([Unknown target operating system])
     cpu_type="generic_fpu"
@@ -943,7 +923,6 @@ if test "x$layer3" = "xenabled"; then
 fi
 s_mmx="$s_i386 dct64_mmx tabinit_mmx synth_mmx"
 s_sse="$s_i386 dct64_mmx tabinit_mmx dct64_sse synth_sse"
-s_x86_64="dct64_x86_64 synth_x86_64"
 s_x86multi="getcpuflags"
 
 dnl CPU specific compiler flags and sources
@@ -1034,18 +1013,6 @@ dnl Not disabling buffer for float mode... check that this is OK now!
   x86_dither) 
     ADD_CPPFLAGS="$ADD_CPPFLAGS -DOPT_MULTI -DOPT_GENERIC -DOPT_GENERIC_DITHER -DOPT_I386 -DOPT_I586 -DOPT_I586_DITHER -DOPT_MMX -DOPT_3DNOW -DOPT_3DNOWEXT -DOPT_SSE -DREAL_IS_FLOAT"
     more_sources="$s_fpu $s_i386 $s_i586 $s_i586d $s_dither $s_mmx $s_3dnow $s_3dnowext $s_sse $s_x86multi"
-  ;;
-  x86-64) 
-    ADD_CPPFLAGS="$ADD_CPPFLAGS -DOPT_X86_64 -DREAL_IS_FLOAT"
-    more_sources="$s_fpu $s_x86_64"
-  ;;
-  x86-64_dither) 
-    ADD_CPPFLAGS="$ADD_CPPFLAGS -DOPT_MULTI -DOPT_X86_64 -DOPT_GENERIC_DITHER -DREAL_IS_FLOAT"
-    more_sources="$s_fpu $s_dither $s_x86_64"
-  ;;
-  x86-64_all) # for direct comparison... undocumented actually very similar to the above because of generic code being there in the hidden anyway
-    ADD_CPPFLAGS="$ADD_CPPFLAGS -DOPT_MULTI -DOPT_X86_64 -DOPT_GENERIC -DOPT_GENERIC_DITHER -DREAL_IS_FLOAT"
-    more_sources="$s_fpu $s_dither $s_x86_64"
   ;;
   *)
   	AC_MSG_ERROR([Unknown CPU type '$cpu_type'])
