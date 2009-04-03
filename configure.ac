@@ -10,7 +10,7 @@ AC_PREREQ(2.57)
 
 dnl ############# Initialisation
 
-AC_INIT([mpg123], [1.7.0], [mpg123-devel@lists.sourceforge.net])
+AC_INIT([mpg123], [1.7.1], [mpg123-devel@lists.sourceforge.net])
 LIBMPG123_VERSION=14:2:14
 AC_SUBST(LIBMPG123_VERSION)
 
