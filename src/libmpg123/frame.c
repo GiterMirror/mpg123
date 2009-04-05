@@ -268,11 +268,8 @@ int frame_buffers(mpg123_handle *fr)
 #endif
 			/* decwin_mmx will share, decwins will be appended ... sizeof(float)==4 */
 			if(decwin_size < (512+32)*4) decwin_size = (512+32)*4;
-
-			/* the second window + alignment zone -- we align for 32 bytes for SSE as
-			   requirement, 64 byte for matching cache line size (that matters!) */
-			decwin_size += (512+32)*4 + 63;
-			/* (512+32)*4/32 == 2176/32 == 68, so one decwin block retains alignment for 32 or 64 bytes */
+			decwin_size += (512+32)*4 + 31; /* the second window + alignment zone */
+			/* (512+32)*4/32 == 2176/32 == 68, so one decwin block retains alignment */
 #ifdef OPT_MULTI
 		}
 #endif
@@ -297,8 +294,8 @@ int frame_buffers(mpg123_handle *fr)
 		{
 #endif
 			/* align decwin, assign that to decwin_mmx, append decwins */
-			/* I need to add to decwin what is missing to the next full 64 byte -- also I want to make gcc -pedantic happy... */
-			fr->decwin = aligned_pointer(fr->rawdecwin,real,64);
+			/* I need to add to decwin what is missing to the next full 32 byte -- also I want to make gcc -pedantic happy... */
+			fr->decwin = aligned_pointer(fr->rawdecwin,real,32);
 			debug1("aligned decwin: %p", (void*)fr->decwin);
 			fr->decwin_mmx = (float*)fr->decwin;
 			fr->decwins = fr->decwin_mmx+512+32;
@@ -546,7 +543,7 @@ off_t frame_fuzzy_find(mpg123_handle *fr, off_t want_frame, off_t* get_frame)
 		fr->accurate = FALSE; /* Fuzzy! */
 		fr->silent_resync = 1;
 		*get_frame = want_frame;
-		ret = (off_t) (fr->audio_start+fr->mean_framesize*want_frame);
+		ret = fr->audio_start+fr->mean_framesize*want_frame;
 	}
 	debug5("fuzzy: want %li of %li, get %li at %li B of %li B",
 		(long)want_frame, (long)fr->track_frames, (long)*get_frame, (long)ret, (long)(fr->rdat.filelen-fr->audio_start));

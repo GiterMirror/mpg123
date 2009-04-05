@@ -71,7 +71,7 @@ static void frame_buffercheck(mpg123_handle *fr)
 	if(fr->firstoff && fr->num == fr->firstframe)
 	{
 		off_t byteoff = samples_to_bytes(fr, fr->firstoff);
-		if((off_t)fr->buffer.fill > byteoff)
+		if(fr->buffer.fill > byteoff)
 		{
 			fr->buffer.fill -= byteoff;
 			/* buffer.p != buffer.data only for own buffer */
@@ -89,7 +89,7 @@ static void frame_buffercheck(mpg123_handle *fr)
 	if(fr->lastoff && fr->num == fr->lastframe)
 	{
 		off_t byteoff = samples_to_bytes(fr, fr->lastoff);
-		if((off_t)fr->buffer.fill > byteoff)
+		if(fr->buffer.fill > byteoff)
 		{
 			fr->buffer.fill = byteoff;
 		}
@@ -98,12 +98,11 @@ static void frame_buffercheck(mpg123_handle *fr)
 }
 #endif
 
+
 int attribute_align_arg mpg123_init(void)
 {
 	ALIGNCHECKK
 	if((sizeof(short) != 2) || (sizeof(long) < 4)) return MPG123_BAD_TYPES;
-
-	if(initialized) return MPG123_OK; /* no need to initialize twice */
 
 #ifndef NO_LAYER12
 	init_layer12(); /* inits also shared tables with layer1 */
@@ -120,6 +119,7 @@ int attribute_align_arg mpg123_init(void)
 void attribute_align_arg mpg123_exit(void)
 {
 	/* nothing yet, but something later perhaps */
+	if(initialized) return;
 }
 
 /* create a new handle with specified decoder, decoder can be "", "auto" or NULL for auto-detection */

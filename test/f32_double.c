@@ -1,19 +1,13 @@
 #include <unistd.h>
-#include <stdio.h>
 
 int main()
 {
-	const size_t bufs = 1024;
-	size_t got;
-	float f[bufs];
-	double d[bufs];
-	while( (got = fread(f, sizeof(float), bufs, stdin)) )
+	float f;
+	double d;
+	while( read(STDIN_FILENO, &f, sizeof(float)) == sizeof(float) )
 	{
-		size_t fi;
-		for(fi=0; fi<got; ++fi)
-		d[fi] = (double) f[fi];
-
-		write(STDOUT_FILENO, d, sizeof(double)*got);
+		d = f;
+		write(STDOUT_FILENO, &d, sizeof(double));
 	}
 	return 0;
 }

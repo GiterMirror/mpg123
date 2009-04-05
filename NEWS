@@ -1,8 +1,6 @@
-1.8.0
+1.7.1
 ---
-- SSE is back -- we have optimized decoding on x86-64 systems!
-- MPG123_MODDIR for changing module directory at runtime
-- code cleanup (signed/unsigned integer usage)
+  - Just one fix for making the RVA switch in terminal and generic control mode work again (instead of plain silence).
 
 1.7.0
 ---

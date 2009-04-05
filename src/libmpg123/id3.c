@@ -35,7 +35,7 @@ static const text_converter text_converters[4] =
 	convert_utf8
 };
 
-const unsigned int encoding_widths[4] = { 1, 2, 2, 1 };
+const int encoding_widths[4] = { 1, 2, 2, 1 };
 
 /* the code starts here... */
 
@@ -186,22 +186,22 @@ void id3_link(mpg123_handle *fr)
 */
 void store_id3_text(mpg123_string *sb, char *source, size_t source_size, const int noquiet)
 {
-	unsigned int encoding;
-	unsigned int bwidth;
+	int encoding;
+	int bwidth;
 	if(!source_size)
 	{
 		debug("Empty id3 data!");
 		return;
 	}
-	encoding = (unsigned int) source[0];
+	encoding = source[0];
 	++source;
 	--source_size;
-	debug1("encoding: %u", encoding);
+	debug1("encoding: %i", encoding);
 	/* A note: ID3v2.3 uses UCS-2 non-variable 16bit encoding, v2.4 uses UTF16.
 	   UTF-16 uses a reserved/private range in UCS-2 to add the magic, so we just always treat it as UTF. */
 	if(encoding > 3)
 	{
-		if(noquiet) warning1("Unknown text encoding %u, assuming ISO8859-1 - I will probably screw a bit up!", encoding);
+		if(noquiet) warning1("Unknown text encoding %d, assuming ISO8859-1 - I will probably screw a bit up!", encoding);
 		encoding = 0;
 	}
 	bwidth = encoding_widths[encoding];
@@ -215,7 +215,7 @@ void store_id3_text(mpg123_string *sb, char *source, size_t source_size, const i
 	if(source_size % bwidth)
 	{
 		/* When we need two bytes for a character, it's strange to have an uneven bytestream length. */
-		if(noquiet) warning2("Weird tag size %d for encoding %u - I will probably trim too early or something but I think the MP3 is broken.", (int)source_size, encoding);
+		if(noquiet) warning2("Weird tag size %d for encoding %d - I will probably trim too early or something but I think the MP3 is broken.", (int)source_size, encoding);
 		source_size -= source_size % bwidth;
 	}
 	text_converters[encoding](sb, (unsigned char*)source, source_size);
@@ -228,7 +228,7 @@ char *next_text(char* prev, int encoding, size_t limit)
 	char *text = prev;
 	unsigned long neednull = encoding_widths[encoding];
 	/* So I go lengths to find zero or double zero... */
-	while(text-prev < (int)limit)
+	while(text-prev < limit)
 	{
 		if(text[0] == 0)
 		{
@@ -293,7 +293,7 @@ static void process_comment(mpg123_handle *fr, enum frame_types tt, char *realda
 	char *descr   = realdata+4;
 	char *text = NULL;
 	mpg123_text *xcom = NULL;
-	if((int)realsize < descr-realdata)
+	if(realsize < descr-realdata)
 	{
 		if(NOQUIET) error1("Invalid frame size of %lu (too small for anything).", (unsigned long)realsize);
 		return;
@@ -341,7 +341,7 @@ static void process_comment(mpg123_handle *fr, enum frame_types tt, char *realda
 		rva_mode = 1;
 		if((rva_mode > -1) && (fr->rva.level[rva_mode] <= rva_level))
 		{
-			fr->rva.gain[rva_mode] = (float) atof(xcom->text.p);
+			fr->rva.gain[rva_mode] = atof(xcom->text.p);
 			if(VERBOSE3) fprintf(stderr, "Note: RVA value %fdB\n", fr->rva.gain[rva_mode]);
 			fr->rva.peak[rva_mode] = 0;
 			fr->rva.level[rva_mode] = rva_level;
@@ -358,7 +358,7 @@ void process_extra(mpg123_handle *fr, char* realdata, size_t realsize, int rva_l
 	char *descr  = realdata+1; /* remember, the encoding is descr[-1] */
 	char *text;
 	mpg123_text *xex;
-	if((int)realsize < descr-realdata)
+	if(realsize < descr-realdata)
 	{
 		if(NOQUIET) error1("Invalid frame size of %lu (too small for anything).", (unsigned long)realsize);
 		return;
@@ -408,12 +408,12 @@ void process_extra(mpg123_handle *fr, char* realdata, size_t realsize, int rva_l
 			{
 				if(is_peak)
 				{
-					fr->rva.peak[rva_mode] = (float) atof(xex->text.p);
+					fr->rva.peak[rva_mode] = atof(xex->text.p);
 					if(VERBOSE3) fprintf(stderr, "Note: RVA peak %f\n", fr->rva.peak[rva_mode]);
 				}
 				else
 				{
-					fr->rva.gain[rva_mode] = (float) atof(xex->text.p);
+					fr->rva.gain[rva_mode] = atof(xex->text.p);
 					if(VERBOSE3) fprintf(stderr, "Note: RVA gain %fdB\n", fr->rva.gain[rva_mode]);
 				}
 				fr->rva.level[rva_mode] = rva_level;
@@ -808,9 +808,6 @@ static void convert_utf16(mpg123_string *sb, unsigned char* s, size_t l, int str
 	size_t high = 0;
 	size_t low  = 1;
 	debug1("convert_utf16 with length %lu", (unsigned long)l);
-
-	if(l < 1){ mpg123_set_string(sb, ""); return; }
-
 	if(!str_be) /* little-endian */
 	{
 		high = 1; /* The second byte is the high byte. */
@@ -839,6 +836,8 @@ static void convert_utf16(mpg123_string *sb, unsigned char* s, size_t l, int str
 		else length += UTF8LEN(point); /* 1,2 or 3 bytes */
 	}
 
+	if(l < 1){ mpg123_set_string(sb, ""); return; }
+
 	if(!mpg123_resize_string(sb, length+1)){ mpg123_free_string(sb); return ; }
 
 	/* Now really convert, skip checks as these have been done just before. */
@@ -855,21 +854,21 @@ static void convert_utf16(mpg123_string *sb, unsigned char* s, size_t l, int str
 		if(codepoint < 0x80) *p++ = (unsigned char) codepoint;
 		else if(codepoint < 0x800)
 		{
-			*p++ = (unsigned char) (0xc0 | (codepoint>>6));
-			*p++ = (unsigned char) (0x80 | (codepoint & 0x3f));
+			*p++ = 0xc0 | (codepoint>>6);
+			*p++ = 0x80 | (codepoint & 0x3f);
 		}
 		else if(codepoint < 0x10000)
 		{
-			*p++ = (unsigned char) (0xe0 | (codepoint>>12));
+			*p++ = 0xe0 | (codepoint>>12);
 			*p++ = 0x80 | ((codepoint>>6) & 0x3f);
 			*p++ = 0x80 | (codepoint & 0x3f);
 		}
 		else if (codepoint < 0x200000) 
 		{
-			*p++ = (unsigned char) (0xf0 | codepoint>>18);
-			*p++ = (unsigned char) (0x80 | ((codepoint>>12) & 0x3f));
-			*p++ = (unsigned char) (0x80 | ((codepoint>>6) & 0x3f));
-			*p++ = (unsigned char) (0x80 | (codepoint & 0x3f));
+			*p++ = 0xf0 | codepoint>>18;
+			*p++ = 0x80 | ((codepoint>>12) & 0x3f);
+			*p++ = 0x80 | ((codepoint>>6) & 0x3f);
+			*p++ = 0x80 | (codepoint & 0x3f);
 		} /* ignore bigger ones (that are not possible here anyway) */
 	}
 	sb->p[sb->size-1] = 0; /* paranoia... */
