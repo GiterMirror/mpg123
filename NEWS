@@ -1,3 +1,7 @@
+1.7.2
+---
+  - Fix a possible vulnerability in the ID3 code (negative encoding values).
+
 1.7.1
 ---
   - Just one fix for making the RVA switch in terminal and generic control mode work again (instead of plain silence).
