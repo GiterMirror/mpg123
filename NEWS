@@ -1,3 +1,7 @@
+1.7.3
+---
+  - Fix a regression introduced with the --doublespeed fix. Now seeking should be a lot smoother again.
+
 1.7.2
 ---
   - Fix a possible vulnerability in the ID3 code (negative encoding values).
