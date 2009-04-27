@@ -32,7 +32,6 @@ typedef struct mpg123_coreaudio
 	int open;
 	char play;
 	int channels;
-	int bps;
 	int last_buffer;
 	int play_done;
 	int decode_done;
@@ -65,7 +64,7 @@ static OSStatus playProc(AudioConverterRef inAudioConverter,
 	
 	for(n = 0; n < outOutputData->mNumberBuffers; n++)
 	{
-		unsigned int wanted = *ioNumberDataPackets * ca->channels * ca->bps;
+		unsigned int wanted = *ioNumberDataPackets * ca->channels * 2;
 		unsigned char *dest;
 		unsigned int read;
 		if(ca->buffer_size < wanted) {
@@ -169,41 +168,18 @@ static int open_coreaudio(audio_output_t *ao)
 	ca->channels = ao->channels;
 	inFormat.mSampleRate = ao->rate;
 	inFormat.mChannelsPerFrame = ao->channels;
+	inFormat.mBitsPerChannel = 16;
+	inFormat.mBytesPerPacket = 2*inFormat.mChannelsPerFrame;
+	inFormat.mFramesPerPacket = 1;
+	inFormat.mBytesPerFrame = 2*inFormat.mChannelsPerFrame;
 	inFormat.mFormatID = kAudioFormatLinearPCM;
 #ifdef _BIG_ENDIAN
-	inFormat.mFormatFlags = kLinearPCMFormatFlagIsPacked | kLinearPCMFormatFlagIsBigEndian;
+	inFormat.mFormatFlags = kLinearPCMFormatFlagIsSignedInteger | kLinearPCMFormatFlagIsPacked | kLinearPCMFormatFlagIsBigEndian;
 #else
-	inFormat.mFormatFlags = kLinearPCMFormatFlagIsPacked;
+	inFormat.mFormatFlags = kLinearPCMFormatFlagIsSignedInteger | kLinearPCMFormatFlagIsPacked;
 #endif
 	
-	switch(ao->format)
-	{
-		case MPG123_ENC_SIGNED_16:
-			inFormat.mFormatFlags |= kLinearPCMFormatFlagIsSignedInteger;
-			ca->bps = 2;
-			break;
-		case MPG123_ENC_SIGNED_8:
-			inFormat.mFormatFlags |= kLinearPCMFormatFlagIsSignedInteger;
-			ca->bps = 1;
-			break;
-		case MPG123_ENC_UNSIGNED_8:
-			ca->bps = 1;
-			break;
-		case MPG123_ENC_SIGNED_32:
-			inFormat.mFormatFlags |= kLinearPCMFormatFlagIsSignedInteger;
-			ca->bps = 4;
-			break;
-		case MPG123_ENC_FLOAT_32:
-			inFormat.mFormatFlags |= kLinearPCMFormatFlagIsFloat;
-			ca->bps = 4;
-			break;
-	}
-	
-	inFormat.mBitsPerChannel = ca->bps << 3;
-	inFormat.mBytesPerPacket = ca->bps*inFormat.mChannelsPerFrame;
-	inFormat.mFramesPerPacket = 1;
-	inFormat.mBytesPerFrame = ca->bps*inFormat.mChannelsPerFrame;
-	
+		
 	/* Add our callback - but don't start it yet */
 	memset(&renderCallback, 0, sizeof(AURenderCallbackStruct));
 	renderCallback.inputProc = convertProc;
@@ -231,9 +207,10 @@ static int open_coreaudio(audio_output_t *ao)
 		}
 		
 		/* Initialise FIFO */
-		ringbuffer_len = ao->rate * FIFO_DURATION * ca->bps * ao->channels;
+		ringbuffer_len = ao->rate * FIFO_DURATION * sizeof(short) *ao->channels;
 		debug2( "Allocating %d byte ring-buffer (%f seconds)", ringbuffer_len, (float)FIFO_DURATION);
 		sfifo_init( &ca->fifo, ringbuffer_len );
+									   
 	}
 	
 	return(0);
@@ -241,7 +218,8 @@ static int open_coreaudio(audio_output_t *ao)
 
 static int get_formats_coreaudio(audio_output_t *ao)
 {
-	return MPG123_ENC_SIGNED_16|MPG123_ENC_SIGNED_8|MPG123_ENC_UNSIGNED_8|MPG123_ENC_SIGNED_32|MPG123_ENC_FLOAT_32;
+	/* Only support Signed 16-bit output */
+	return MPG123_ENC_SIGNED_16;
 }
 
 static int write_coreaudio(audio_output_t *ao, unsigned char *buf, int len)

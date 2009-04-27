@@ -80,19 +80,17 @@ static size_t rando(size_t n)
 
 char *get_next_file()
 {
-	struct listitem *newitem = NULL;
+	char *newfile;
 
-	if(pl.fill == 0) return NULL;
-
-	++pl.playcount;
-
+	if(pl.fill == 0) newfile = NULL;
+	else
 	/* normal order, just pick next thing */
 	if(param.shuffle < 2)
 	{
 		do
 		{
-			if(pl.pos < pl.fill) newitem = &pl.list[pl.pos];
-			else newitem = NULL;
+			if(pl.pos < pl.fill) newfile = pl.list[pl.pos].url;
+			else newfile = NULL;
 			/* if we have rounds left, decrease loop, else reinit loop because it's a new track */
 			if(pl.loop > 0) --pl.loop; /* loop for current track... */
 			if(pl.loop == 0)
@@ -100,24 +98,15 @@ char *get_next_file()
 				pl.loop = param.loop;
 				++pl.pos;
 			}
-		} while(pl.loop == 0 && newitem != NULL);
+		} while(pl.loop == 0 && newfile != NULL);
 	}
 	else
 	{	/* Randomly select files, with repeating... but keep track of current track for playlist printing. */
-		do /* limiting randomness: don't repeat too early */
-		{
-			pl.pos = rando(pl.fill);
-		} while( pl.list[pl.pos].playcount && (pl.playcount - pl.list[pl.pos].playcount) <= pl.fill/2 );
+		pl.pos = rando(pl.fill)+1;
+		newfile = pl.list[ pl.pos-1 ].url;
 	}
 
-	/* "-" is STDOUT, "" is dumb, NULL is nothing */
-	if(newitem != NULL)
-	{
-		/* Remember the playback position of the track. */
-		newitem->playcount = pl.playcount;
-		return newitem->url;
-	}
-	else return NULL;
+	return newfile; /* "-" is STDOUT, "" is dumb, NULL is nothing */
 }
 
 /* It doesn't really matter on program exit, but anyway...
@@ -148,7 +137,6 @@ void init_playlist()
 	SRAND(time(NULL));
 	pl.file = NULL;
 	pl.entry = 0;
-	pl.playcount = 0;
 	pl.size = 0;
 	pl.fill = 0;
 	pl.pos = 0;
@@ -544,7 +532,6 @@ int add_to_playlist(char* new_entry, char freeit)
 	{
 		pl.list[pl.fill].freeit = freeit;
 		pl.list[pl.fill].url = new_entry;
-		pl.list[pl.fill].playcount = 0;
 		++pl.fill;
 	}
 	else

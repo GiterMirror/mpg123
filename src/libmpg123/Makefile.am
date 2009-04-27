@@ -47,7 +47,6 @@ libmpg123_la_SOURCES = \
 	synth_mono.h \
 	synth_ntom.h \
 	synth_8bit.h \
-	synths.h \
 	equalizer.c \
 	huffman.h \
 	icy.h \
@@ -84,9 +83,6 @@ EXTRA_libmpg123_la_SOURCES = \
 	dct64_i486.c \
 	dct64_mmx.S \
 	dct64_sse.S \
-	dct64_sse_float.S \
-	dct64_x86_64.S \
-	dct64_x86_64_float.S \
 	synth_3dnowext.S \
 	synth_3dnow.S \
 	synth_altivec.c \
@@ -96,14 +92,6 @@ EXTRA_libmpg123_la_SOURCES = \
 	synth_mmx.S \
 	synth_sse3d.h \
 	synth_sse.S \
-	synth_sse_float.S \
-	synth_stereo_sse_float.S \
-	synth_x86_64.S \
-	synth_x86_64_float.S \
-	synth_x86_64_s32.S \
-	synth_stereo_x86_64.S \
-	synth_stereo_x86_64_float.S \
-	synth_stereo_x86_64_s32.S \
 	ntom.c \
 	synth.c \
 	synth_8bit.c \

@@ -94,7 +94,7 @@ void I_step_two(real fraction[2][SBLIMIT],unsigned int balloc[2*SBLIMIT], unsign
 		{
 			if((n=*ba++))
 			{
-				real samp = (real) ( ((-1)<<n) + (*sample++) + 1);
+				real samp = ( ((-1)<<n) + (*sample++) + 1);
 				*f0++ = samp * fr->muls[n+1][*sca++];
 				*f1++ = samp * fr->muls[n+1][*sca++];
 			}
@@ -144,9 +144,14 @@ int do_layer1(mpg123_handle *fr)
 		I_step_two(fraction,balloc,scale_index,fr);
 
 		if(single != SINGLE_STEREO)
-		clip += (fr->synth_mono)(fraction[single], fr);
+		{
+			clip += (fr->synth_mono)( (real *) fraction[single], fr);
+		}
 		else
-		clip += (fr->synth_stereo)(fraction[0], fraction[1], fr);
+		{
+			clip += (fr->synth)( (real *) fraction[0], 0, fr, 0);
+			clip += (fr->synth)( (real *) fraction[1], 1, fr, 1);
+		}
 	}
 
 	return clip;

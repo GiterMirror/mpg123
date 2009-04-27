@@ -75,7 +75,7 @@ real* init_layer12_table(mpg123_handle *fr, real *table, double m)
 {
 	int i,j;
 	for(j=3,i=0;i<63;i++,j--)
-	*table++ = (real) (m * pow(2.0,(double) j / 3.0));
+	*table++ = m * pow(2.0,(double) j / 3.0);
 
 	return table;
 }
@@ -342,9 +342,14 @@ int do_layer2(mpg123_handle *fr)
 		for(j=0;j<3;j++) 
 		{
 			if(single != SINGLE_STEREO)
-			clip += (fr->synth_mono)(fraction[single][j], fr);
+			{
+				clip += (fr->synth_mono) (fraction[single][j], fr);
+			}
 			else
-			clip += (fr->synth_stereo)(fraction[0][j], fraction[1][j], fr);
+			{
+				clip += (fr->synth) (fraction[0][j], 0, fr, 0);
+				clip += (fr->synth) (fraction[1][j], 1, fr, 1);
+			}
 		}
 	}
 

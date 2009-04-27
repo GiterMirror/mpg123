@@ -36,10 +36,6 @@
    If they are actually defined and used depends on preprocessor machinery.
    See synth.c and optimize.h for that, also some special C and assembler files. */
 
-/* The call of left and right plain synth, wrapped.
-   This may be replaced by a direct stereo optimized synth. */
-int synth_stereo_wrap(real*, real*, mpg123_handle*);
-
 #ifndef NO_16BIT
 /* The signed-16bit-producing variants. */
 int synth_1to1            (real*, int, mpg123_handle*, int);
@@ -52,9 +48,6 @@ int synth_1to1_3dnow      (real*, int, mpg123_handle*, int);
 int synth_1to1_sse        (real*, int, mpg123_handle*, int);
 int synth_1to1_3dnowext   (real*, int, mpg123_handle*, int);
 int synth_1to1_altivec    (real*, int, mpg123_handle*, int);
-int synth_1to1_stereo_altivec(real*, real*, mpg123_handle*);
-int synth_1to1_x86_64     (real*, int, mpg123_handle*, int);
-int synth_1to1_stereo_x86_64(real*, real*, mpg123_handle*);
 /* This is different, special usage in layer3.c only.
    Hence, the name... and now forget about it.
    Never use it outside that special portion of code inside layer3.c! */
@@ -122,12 +115,6 @@ void ntom_set_ntom(mpg123_handle *fr, off_t num);
 /* The real-producing variants. */
 int synth_1to1_real            (real*, int, mpg123_handle*, int);
 int synth_1to1_real_i386       (real*, int, mpg123_handle*, int);
-int synth_1to1_real_sse        (real*, int, mpg123_handle*, int);
-int synth_1to1_real_stereo_sse (real*, real*, mpg123_handle*);
-int synth_1to1_real_x86_64     (real*, int, mpg123_handle*, int);
-int synth_1to1_real_stereo_x86_64(real*, real*, mpg123_handle*);
-int synth_1to1_real_altivec    (real*, int, mpg123_handle*, int);
-int synth_1to1_real_stereo_altivec(real*, real*, mpg123_handle*);
 int synth_1to1_real_mono       (real*, mpg123_handle*);
 int synth_1to1_real_mono2stereo(real*, mpg123_handle*);
 #ifndef NO_DOWNSAMPLE
@@ -151,10 +138,6 @@ int synth_ntom_real_mono2stereo(real*, mpg123_handle*);
 /* 32bit integer */
 int synth_1to1_s32            (real*, int, mpg123_handle*, int);
 int synth_1to1_s32_i386       (real*, int, mpg123_handle*, int);
-int synth_1to1_s32_x86_64     (real*, int, mpg123_handle*, int);
-int synth_1to1_s32_stereo_x86_64(real*, real*, mpg123_handle*);
-int synth_1to1_s32_altivec    (real*, int, mpg123_handle*, int);
-int synth_1to1_s32_stereo_altivec(real*, real*, mpg123_handle*);
 int synth_1to1_s32_mono       (real*, mpg123_handle*);
 int synth_1to1_s32_mono2stereo(real*, mpg123_handle*);
 #ifndef NO_DOWNSAMPLE

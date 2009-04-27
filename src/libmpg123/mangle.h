@@ -31,13 +31,15 @@
 #endif
 
 /* Feel free to add more to the list, eg. a.out IMO */
-#if defined(__CYGWIN__) || defined(__MINGW32__) || defined(__OS2__) || defined(_MSC_VER) || \
+#if defined(__CYGWIN__) || defined(__MINGW32__) || defined(__OS2__) || \
    (defined(__OpenBSD__) && !defined(__ELF__)) || defined(__APPLE__)
+#define MANGLE(a) "_" #a
 #define ASM_NAME(a) _##a
 #define ASM_VALUE(a) $_##a
 #else
+#define MANGLE(a) #a
 #define ASM_NAME(a) a
-#define ASM_VALUE(a) $##a
+#define ASM_VALUE(a) "$" #a
 #endif
 
 #if defined(__CYGWIN__) || defined(__MINGW32__) || defined(__APPLE__)

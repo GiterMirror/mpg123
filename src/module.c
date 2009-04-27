@@ -39,20 +39,15 @@ static char *get_module_dir()
 	/* Either PKGLIBDIR is accessible right away or we search for some possible plugin dirs relative to binary path. */
 	DIR* dir = NULL;
 	char *moddir = NULL;
-	const char *defaultdir;
-	/* Compiled-in default module dir or environment variable MPG123_MODDIR. */
-	defaultdir = getenv("MPG123_MODDIR");
-	if(defaultdir == NULL)
-	defaultdir=PKGLIBDIR;
 
-	dir = opendir(defaultdir);
+	dir = opendir(PKGLIBDIR);
 	if(dir != NULL)
 	{
-		size_t l = strlen(defaultdir);
+		size_t l = strlen(PKGLIBDIR);
 		moddir = malloc(l+1);
 		if(moddir != NULL)
 		{
-			strcpy(moddir, defaultdir);
+			strcpy(moddir, PKGLIBDIR);
 			moddir[l] = 0;
 		}
 		closedir(dir);

@@ -10,20 +10,11 @@
 #include "sample.h"
 #include "debug.h"
 
-/* Stereo-related synth, wrapping over _some_ plain synth. */
-int synth_stereo_wrap(real *bandPtr_l, real *bandPtr_r, mpg123_handle *fr)
-{
-	int clip;
-	clip  = (fr->synth)(bandPtr_l, 0, fr, 0);
-	clip += (fr->synth)(bandPtr_r, 1, fr, 1);
-	return clip;
-}
-
 /*
 	Part 1: All synth functions that produce signed short.
 	That is:
 		- synth_1to1 with cpu-specific variants (synth_1to1_i386, synth_1to1_i586 ...)
-		- synth_1to1_mono and synth_1to1_mono2stereo; which use fr->synths.plain[r_1to1][f_16].
+		- synth_1to1_mono and synth_1to1_mono2stereo; which use opt_synth_1to1(fr).
 	Nearly every decoder variant has it's own synth_1to1, while the mono conversion is shared.
 */
 
@@ -38,7 +29,7 @@ int synth_stereo_wrap(real *bandPtr_l, real *bandPtr_r, mpg123_handle *fr)
 #undef SYNTH_NAME
 
 /* Mono-related synths; they wrap over _some_ synth_1to1. */
-#define SYNTH_NAME       fr->synths.plain[r_1to1][f_16]
+#define SYNTH_NAME       opt_synth_1to1(fr)
 #define MONO_NAME        synth_1to1_mono
 #define MONO2STEREO_NAME synth_1to1_mono2stereo
 #include "synth_mono.h"
@@ -168,97 +159,6 @@ int synth_1to1_3dnowext(real *bandPtr, int channel, mpg123_handle *fr, int final
 }
 #endif
 
-#ifdef OPT_X86_64
-/* This is defined in assembler. */
-int synth_1to1_x86_64_asm(short *window, short *b0, short *samples, int bo1);
-int synth_1to1_stereo_x86_64_asm(short *window, short *b0l, short *b0r, short *samples, int bo1);
-void dct64_x86_64(short *out0, short *out1, real *samples);
-/* This is just a hull to use the mpg123 handle. */
-int synth_1to1_x86_64(real *bandPtr,int channel, mpg123_handle *fr, int final)
-{
-	short *samples = (short *) (fr->buffer.data+fr->buffer.fill);	
-	short *b0, **buf;
-	int clip; 
-	int bo1;
-
-	if(fr->have_eq_settings) do_equalizer(bandPtr,channel,fr->equalizer);
-
-	if(!channel)
-	{
-		fr->bo--;
-		fr->bo &= 0xf;
-		buf = fr->short_buffs[0];
-	}
-	else
-	{
-		samples++;
-		buf = fr->short_buffs[1];
-	}
-
-	if(fr->bo & 0x1) 
-	{
-		b0 = buf[0];
-		bo1 = fr->bo;
-		dct64_x86_64(buf[1]+((fr->bo+1)&0xf),buf[0]+fr->bo,bandPtr);
-	}
-	else
-	{
-		b0 = buf[1];
-		bo1 = fr->bo+1;
-		dct64_x86_64(buf[0]+fr->bo,buf[1]+fr->bo+1,bandPtr);
-	}
-
-	clip = synth_1to1_x86_64_asm((short *)fr->decwins, b0, samples, bo1);
-
-	if(final) fr->buffer.fill += 128;
-
-	return clip;
-}
-
-int synth_1to1_stereo_x86_64(real *bandPtr_l,real *bandPtr_r, mpg123_handle *fr)
-{
-	short *samples = (short *) (fr->buffer.data+fr->buffer.fill);
-	short *b0l, *b0r, **bufl, **bufr;
-	int clip; 
-	int bo1;
-
-	if(fr->have_eq_settings)
-	{
-		do_equalizer(bandPtr_l,0,fr->equalizer);
-		do_equalizer(bandPtr_r,1,fr->equalizer);
-	}
-
-	fr->bo--;
-	fr->bo &= 0xf;
-	bufl = fr->short_buffs[0];
-	bufr = fr->short_buffs[1];
-
-	if(fr->bo & 0x1) 
-	{
-		b0l = bufl[0];
-		b0r = bufr[0];
-		bo1 = fr->bo;
-		dct64_x86_64(bufl[1]+((fr->bo+1)&0xf),bufl[0]+fr->bo,bandPtr_l);
-		dct64_x86_64(bufr[1]+((fr->bo+1)&0xf),bufr[0]+fr->bo,bandPtr_r);
-	}
-	else
-	{
-		b0l = bufl[1];
-		b0r = bufr[1];
-		bo1 = fr->bo+1;
-		dct64_x86_64(bufl[0]+fr->bo,bufl[1]+fr->bo+1,bandPtr_l);
-		dct64_x86_64(bufr[0]+fr->bo,bufr[1]+fr->bo+1,bandPtr_r);
-	}
-
-	clip = synth_1to1_stereo_x86_64_asm((short *)fr->decwins, b0l, b0r, samples, bo1);
-
-	fr->buffer.fill += 128;
-
-	return clip;
-}
-
-#endif
-
 #ifndef NO_DOWNSAMPLE
 
 /*
@@ -279,7 +179,7 @@ int synth_1to1_stereo_x86_64(real *bandPtr_l,real *bandPtr_r, mpg123_handle *fr)
 #undef SYNTH_NAME
 #endif
 
-#define SYNTH_NAME       fr->synths.plain[r_2to1][f_16]
+#define SYNTH_NAME       opt_synth_2to1(fr)
 #define MONO_NAME        synth_2to1_mono
 #define MONO2STEREO_NAME synth_2to1_mono2stereo
 #include "synth_mono.h"
@@ -316,7 +216,7 @@ int synth_1to1_stereo_x86_64(real *bandPtr_l,real *bandPtr_r, mpg123_handle *fr)
 #undef SYNTH_NAME
 #endif
 
-#define SYNTH_NAME       fr->synths.plain[r_4to1][f_16] /* This is just for the _i386 one... gotta check if it is really useful... */
+#define SYNTH_NAME       opt_synth_4to1(fr) /* This is just for the _i386 one... gotta check if it is really useful... */
 #define MONO_NAME        synth_4to1_mono
 #define MONO2STEREO_NAME synth_4to1_mono2stereo
 #include "synth_mono.h"
