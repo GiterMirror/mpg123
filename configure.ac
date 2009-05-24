@@ -10,7 +10,7 @@ AC_PREREQ(2.57)
 
 dnl ############# Initialisation
 
-AC_INIT([mpg123], [1.8.0], [mpg123-devel@lists.sourceforge.net])
+AC_INIT([mpg123], [1.8rc1], [mpg123-devel@lists.sourceforge.net])
 LIBMPG123_VERSION=18:5:18
 AC_SUBST(LIBMPG123_VERSION)
 
@@ -587,19 +587,6 @@ case $target in
   ;;
 esac
 
-AC_ARG_ENABLE(buffer,
-  [  --enable-buffer=[yes/no] disable audio buffer code (default uses system whitelist... proper checks later) ],
-  [
-    if test "x$enableval" = xyes
-    then
-      echo "Note: Enabling buffer per request... perhaps it will not build anyway."
-      buffer="enabled"
-    else
-      echo "Note: Disabling buffer per request."
-      buffer="disabled"
-    fi
-  ]
-)
 
 dnl Did user choose other CPU type ?
 if test "x$with_cpu" != "x"; then
