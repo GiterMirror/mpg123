@@ -214,7 +214,7 @@ audio_output_t* alloc_audio_output()
 	/* Initialise variables */
 	ao->fn = -1;
 	ao->rate = -1;
-	ao->gain = param.gain;
+	ao->gain = -1;
 	ao->userptr = NULL;
 	ao->device = NULL;
 	ao->channels = -1;
@@ -428,11 +428,7 @@ void audio_capabilities(audio_output_t *ao, mpg123_handle *mh)
 
 #ifndef NOXFERMEM
 	/* Buffer loop shall start normal operation now. */
-	if(param.usebuffer)
-	{
-		xfermem_putcmd(buffermem->fd[XF_WRITER], XF_CMD_WAKEUP);
-		xfermem_getcmd(buffermem->fd[XF_WRITER], TRUE);
-	}
+	if(param.usebuffer) xfermem_putcmd(buffermem->fd[XF_WRITER], XF_CMD_WAKEUP);
 #endif
 
 	if(param.verbose > 1) print_capabilities(ao, mh);
@@ -458,6 +454,17 @@ int init_output(audio_output_t **ao)
 	init_done = TRUE;
   
 #ifndef NOXFERMEM
+	/*
+	* Only DECODE_AUDIO and DECODE_FILE are sanely handled by the
+	* buffer process. For now, we just ignore the request
+	* to buffer the output. [dk]
+	*/
+	if (param.usebuffer && (param.outmode != DECODE_AUDIO) &&
+	(param.outmode != DECODE_FILE)) {
+	fprintf(stderr, "Sorry, won't buffer output unless writing plain audio.\n");
+	param.usebuffer = 0;
+	} 
+
 	if (param.usebuffer)
 	{
 		unsigned int bufferbytes;

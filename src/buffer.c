@@ -93,17 +93,15 @@ extern int buffer_pid;
 
 void buffer_sig(int signal, int block)
 {
-	if (!buffermem) return;
-
-	if (!block)
-	{ /* Just signal, do not wait for anything. */
-		kill(buffer_pid, signal);
+	if (!buffermem)
 		return;
-	}
 
-	/* kill() and the waiting needs to be taken care of properly for parallel execution.
-	  Nobody reported issues so far, but I want to be sure. */
-	if(xfermem_sigblock(XF_WRITER, buffermem, buffer_pid, signal) != XF_CMD_WAKEUP) 
+	kill(buffer_pid, signal);
+	
+	if (!block)
+		return;
+
+	if(xfermem_block(XF_WRITER, buffermem) != XF_CMD_WAKEUP) 
 		perror("Could not resync/reset buffers");
 	return;
 }
@@ -140,7 +138,6 @@ void buffer_loop(audio_output_t *ao, sigset_t *oldsigset)
 		else if(cmd == XF_CMD_WAKEUP)
 		{
 			debug("got wakeup... leaving config mode");
-			xfermem_putcmd(buffermem->fd[XF_READER], XF_CMD_WAKEUP);
 			break;
 		}
 		else
@@ -161,7 +158,7 @@ void buffer_loop(audio_output_t *ao, sigset_t *oldsigset)
 		if (intflag) {
 			debug("handle intflag... flushing");
 			intflag = FALSE;
-			ao->flush(ao);
+			if (param.outmode == DECODE_AUDIO) ao->flush(ao);
 			/* Either prepare for waiting or empty buffer now. */
 			if(!xf->justwait) xf->readindex = xf->freeindex;
 			else
