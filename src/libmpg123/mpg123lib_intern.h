@@ -67,140 +67,13 @@
 
 # define real long
 
-# define REAL_RADIX				24
-# define REAL_FACTOR			16777216.0
-
-static inline long double_to_long_rounded(double x, double scalefac)
-{
-	x *= scalefac;
-	x += (x > 0) ? 0.5 : -0.5;
-	return (long)x;
-}
-
-# ifdef __GNUC__
-#  if defined(OPT_I386)
-/* for i386_nofpu decoder */
-#   define REAL_MUL_ASM(x, y, radix) \
-({ \
-	long _x=(x), _y=(y); \
-	__asm__ ( \
-		"imull %1 \n\t" \
-		"shrdl %2, %%edx, %0 \n\t" \
-		: "+&a" (_x) \
-		: "mr" (_y), "I" (radix) \
-		: "%edx", "cc" \
-	); \
-	_x; \
-})
-
-#   define REAL_MUL_SCALE_LAYER3_ASM(x, y, radix) \
-({ \
-	long _x=(x), _y=(y), _radix=(radix); \
-	__asm__ ( \
-		"imull %1 \n\t" \
-		"shrdl %%cl, %%edx, %0 \n\t" \
-		: "+&a" (_x) \
-		: "mr" (_y), "c" (_radix) \
-		: "%edx", "cc" \
-	); \
-	_x; \
-})
-#  elif defined(OPT_PPC)
-/* for powerpc */
-#   define REAL_MUL_ASM(x, y, radix) \
-({ \
-	long _x=(x), _y=(y), _mull, _mulh; \
-	__asm__ ( \
-		"mullw %0, %2, %3 \n\t" \
-		"mulhw %1, %2, %3 \n\t" \
-		"srwi %0, %0, %4 \n\t" \
-		"rlwimi %0, %1, %5, 0, %6 \n\t" \
-		: "=&r" (_mull), "=&r" (_mulh) \
-		: "%r" (_x), "r" (_y), "i" (radix), "i" (32-(radix)), "i" ((radix)-1) \
-	); \
-	_mull; \
-})
-
-#   define REAL_MUL_SCALE_LAYER3_ASM(x, y, radix) \
-({ \
-	long _x=(x), _y=(y), _radix=(radix), _mull, _mulh, _radix2; \
-	__asm__ ( \
-		"mullw %0, %3, %4 \n\t" \
-		"mulhw %1, %3, %4 \n\t" \
-		"subfic %2, %5, 32 \n\t" \
-		"srw %0, %0, %5 \n\t" \
-		"slw %1, %1, %2 \n\t" \
-		"or %0, %0, %1 \n\t" \
-		: "=&r" (_mull), "=&r" (_mulh), "=&r" (_radix2) \
-		: "%r" (_x), "r" (_y), "r" (_radix) \
-		: "cc" \
-	); \
-	_mull; \
-})
-#  elif defined(OPT_ARM)
-/* for arm */
-#   define REAL_MUL_ASM(x, y, radix) \
-({ \
-	long _x=(x), _y=(y), _mull, _mulh; \
-	__asm__ ( \
-		"smull %0, %1, %2, %3 \n\t" \
-		"lsr %0, %0, %4 \n\t" \
-		"orr %0, %0, %1, lsl %5 \n\t" \
-		: "=&r" (_mull), "=&r" (_mulh) \
-		: "%r" (_x), "r" (_y), "M" (radix), "M" (32-(radix)) \
-	); \
-	_mull; \
-})
-
-#   define REAL_MUL_SCALE_LAYER3_ASM(x, y, radix) \
-({ \
-	long _x=(x), _y=(y), _radix=(radix), _mull, _mulh, _radix2; \
-	__asm__ ( \
-		"smull %0, %1, %3, %4 \n\t" \
-		"mov %2, #32 \n\t" \
-		"lsr %0, %0, %5 \n\t" \
-		"sub %2, %2, %5 \n\t" \
-		"orr %0, %0, %1, lsl %2 \n\t" \
-		: "=&r" (_mull), "=&r" (_mulh), "=&r" (_radix2) \
-		: "%r" (_x), "r" (_y), "r" (_radix) \
-	); \
-	_mull; \
-})
-#  endif
-# endif
+# define REAL_RADIX            15
+# define REAL_FACTOR           (32.0 * 1024.0)
 
 /* I just changed the (int) to (long) there... seemed right. */
-# define DOUBLE_TO_REAL(x)					(double_to_long_rounded(x, REAL_FACTOR))
-# define DOUBLE_TO_REAL_15(x)				(double_to_long_rounded(x, 32768.0))
-# define DOUBLE_TO_REAL_POW43(x)			(double_to_long_rounded(x, 8192.0))
-# define DOUBLE_TO_REAL_SCALE_LAYER12(x)	(double_to_long_rounded(x, 1073741824.0))
-# define DOUBLE_TO_REAL_SCALE_LAYER3(x, y)	(double_to_long_rounded(x, pow(2.0,gainpow2_scale[y])))
-# define REAL_TO_DOUBLE(x)					((double)(x) / REAL_FACTOR)
-# ifdef REAL_MUL_ASM
-#  define REAL_MUL(x, y)					REAL_MUL_ASM(x, y, REAL_RADIX)
-#  define REAL_MUL_15(x, y)					REAL_MUL_ASM(x, y, 15)
-#  define REAL_MUL_SCALE_LAYER12(x, y)		REAL_MUL_ASM(x, y, 15 + 30 - REAL_RADIX)
-# else
-#  define REAL_MUL(x, y)					(((long long)(x) * (long long)(y)) >> REAL_RADIX)
-#  define REAL_MUL_15(x, y)					(((long long)(x) * (long long)(y)) >> 15)
-#  define REAL_MUL_SCALE_LAYER12(x, y)		(((long long)(x) * (long long)(y)) >> (15 + 30 - REAL_RADIX))
-# endif
-# ifdef REAL_MUL_SCALE_LAYER3_ASM
-#  define REAL_MUL_SCALE_LAYER3(x, y, z)	REAL_MUL_SCALE_LAYER3_ASM(x, y, 13 + gainpow2_scale[z] - REAL_RADIX)
-# else
-#  define REAL_MUL_SCALE_LAYER3(x, y, z)	(((long long)(x) * (long long)(y)) >> (13 + gainpow2_scale[z] - REAL_RADIX))
-# endif
-# define REAL_SCALE_LAYER12(x)				((long)((x) >> (30 - REAL_RADIX)))
-# define REAL_SCALE_LAYER3(x, y)			((long)((x) >> (gainpow2_scale[y] - REAL_RADIX)))
-# ifdef ACCURATE_ROUNDING
-#  define DOUBLE_TO_REAL_WINDOW(x)			DOUBLE_TO_REAL_15(x)
-#  define REAL_MUL_SYNTH(x, y)				REAL_MUL(x, y)
-#  define REAL_SCALE_DCT64(x)				(x)
-# else
-#  define DOUBLE_TO_REAL_WINDOW(x)			(double_to_long_rounded(x, 0.5))
-#  define REAL_MUL_SYNTH(x, y)				((x) * (y))
-#  define REAL_SCALE_DCT64(x)				((x) >> 8)
-# endif
+# define DOUBLE_TO_REAL(x)     ((long)((x) * REAL_FACTOR))
+# define REAL_TO_DOUBLE(x)     ((double)(x) / REAL_FACTOR)
+# define REAL_MUL(x, y)                (((long long)(x) * (long long)(y)) >> REAL_RADIX)
 #  define REAL_SCANF "%ld"
 #  define REAL_PRINTF "%ld"
 
@@ -217,50 +90,14 @@ static inline long double_to_long_rounded(double x, double scalefac)
 #endif
 
 #ifndef DOUBLE_TO_REAL
-# define DOUBLE_TO_REAL(x)					(real)(x)
-#endif
-#ifndef DOUBLE_TO_REAL_15
-# define DOUBLE_TO_REAL_15(x)				(real)(x)
-#endif
-#ifndef DOUBLE_TO_REAL_WINDOW
-# define DOUBLE_TO_REAL_WINDOW(x)			(real)(x)
-#endif
-#ifndef DOUBLE_TO_REAL_POW43
-# define DOUBLE_TO_REAL_POW43(x)			(real)(x)
-#endif
-#ifndef DOUBLE_TO_REAL_SCALE_LAYER12
-# define DOUBLE_TO_REAL_SCALE_LAYER12(x)	(real)(x)
-#endif
-#ifndef DOUBLE_TO_REAL_SCALE_LAYER3
-# define DOUBLE_TO_REAL_SCALE_LAYER3(x, y)	(real)(x)
+# define DOUBLE_TO_REAL(x)     (real)(x)
 #endif
 #ifndef REAL_TO_DOUBLE
-# define REAL_TO_DOUBLE(x)					(x)
+# define REAL_TO_DOUBLE(x)     (x)
 #endif
 
 #ifndef REAL_MUL
-# define REAL_MUL(x, y)						((x) * (y))
-#endif
-#ifndef REAL_MUL_SYNTH
-# define REAL_MUL_SYNTH(x, y)				((x) * (y))
-#endif
-#ifndef REAL_MUL_15
-# define REAL_MUL_15(x, y)					((x) * (y))
-#endif
-#ifndef REAL_MUL_SCALE_LAYER12
-# define REAL_MUL_SCALE_LAYER12(x, y)		((x) * (y))
-#endif
-#ifndef REAL_MUL_SCALE_LAYER3
-# define REAL_MUL_SCALE_LAYER3(x, y, z)		((x) * (y))
-#endif
-#ifndef REAL_SCALE_LAYER12
-# define REAL_SCALE_LAYER12(x)				(x)
-#endif
-#ifndef REAL_SCALE_LAYER3
-# define REAL_SCALE_LAYER3(x, y)			(x)
-#endif
-#ifndef REAL_SCALE_DCT64
-# define REAL_SCALE_DCT64(x)				(x)
+# define REAL_MUL(x, y)                ((x) * (y))
 #endif
 
 /* used to be: AUDIOBUFSIZE = n*64 with n=1,2,3 ...
