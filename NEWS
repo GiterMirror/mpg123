@@ -1,8 +1,6 @@
 1.8.0 (The Taihei Monmament)
 ---
 
-Still open: State of x86-64 opts on Windows platform (need debugging).
-
 - New and improved SSE optimizations! For x86-64, too! Also AltiVec! Fast float output! Faster stereo!
   Finally, this should put mpg123 into the efficiency-leading position on current hardware!
   Thanks go out to Taihei Monma for pushing lots of new assembler code.
