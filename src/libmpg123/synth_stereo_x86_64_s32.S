@@ -85,7 +85,7 @@ ASM_NAME(synth_1to1_s32_stereo_x86_64_asm):
 #ifdef _WIN64
 	shlq		$32, %rax
 	shrq		$30, %rax
-	movq		%rcx, %rsi
+	movq		%rcx, %rbx
 	movq		%r9, %rdi
 #else
 	movq		%r8, %rax

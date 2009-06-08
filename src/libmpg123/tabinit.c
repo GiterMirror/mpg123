@@ -149,7 +149,7 @@ void make_decode_tables(mpg123_handle *fr)
 	for(i=0,j=0;i<256;i++,j++,idx+=32)
 	{
 		if(idx < 512+16)
-		fr->decwin[idx+16] = fr->decwin[idx] = DOUBLE_TO_REAL_WINDOW((double) intwinbase[j] * scaleval);
+		fr->decwin[idx+16] = fr->decwin[idx] = DOUBLE_TO_REAL((double) intwinbase[j] * scaleval);
 
 		if(i % 32 == 31)
 		idx -= 1023;
@@ -160,16 +160,16 @@ void make_decode_tables(mpg123_handle *fr)
 	for( /* i=256 */ ;i<512;i++,j--,idx+=32)
 	{
 		if(idx < 512+16)
-		fr->decwin[idx+16] = fr->decwin[idx] = DOUBLE_TO_REAL_WINDOW((double) intwinbase[j] * scaleval);
+		fr->decwin[idx+16] = fr->decwin[idx] = DOUBLE_TO_REAL((double) intwinbase[j] * scaleval);
 
 		if(i % 32 == 31)
 		idx -= 1023;
 		if(i % 64 == 63)
 		scaleval = - scaleval;
 	}
-#if defined(OPT_X86_64) || defined(OPT_ALTIVEC) || defined(OPT_SSE) || defined(OPT_ARM)
-	if(fr->cpu_opts.type == x86_64 || fr->cpu_opts.type == altivec || fr->cpu_opts.type == sse || fr->cpu_opts.type == arm)
-	{ /* for float SSE / AltiVec / ARM decoder */
+#if defined(OPT_X86_64) || defined(OPT_ALTIVEC) || defined(OPT_SSE)
+	if(fr->cpu_opts.type == x86_64 || fr->cpu_opts.type == altivec || fr->cpu_opts.type == sse)
+	{ /* for float SSE / AltiVec decoder */
 		for(i=512; i<512+32; i++)
 		{
 			fr->decwin[i] = (i&1) ? fr->decwin[i] : 0;
