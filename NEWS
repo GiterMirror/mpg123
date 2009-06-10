@@ -1,6 +1,3 @@
-- integer decoder fun
-- buffer plays any audio type
-
 1.8.0 (The Taihei Monmament)
 ---
 
@@ -45,7 +42,6 @@
 - code cleanup
   - signed/unsigned integer usage, make compilers more happy)
   - simplified synth selection code (it is _less_ code now, and does more)
-- Fixed behaviour of MPG123_NEW_FORMAT: Now it does not stop you from just continuing decoding without querying the (new) output format, this behaviour regression had been there since somewhen after 1.4.3 .
 
 1.7.3
 ---

@@ -788,7 +788,6 @@ int attribute_align_arg mpg123_decode_frame(mpg123_handle *mh, off_t *num, unsig
 			if(mh->new_format)
 			{
 				debug("notifiying new format");
-				mh->new_format = 0;
 				return MPG123_NEW_FORMAT;
 			}
 			if(num != NULL) *num = mh->num;
@@ -878,7 +877,6 @@ int attribute_align_arg mpg123_decode(mpg123_handle *mh, const unsigned char *in
 			if(mh->new_format)
 			{
 				debug("notifiying new format");
-				mh->new_format = 0;
 				return MPG123_NEW_FORMAT;
 			}
 			if(mh->buffer.size - mh->buffer.fill < mh->outblock)
@@ -1445,7 +1443,7 @@ const char* attribute_align_arg mpg123_plain_strerror(int errcode)
 		case MPG123_NEED_MORE:
 			return "Message: Feed me more input data!";
 		case MPG123_NEW_FORMAT:
-			return "Message: Prepare for a changed audio format (query the new one)!";
+			return "Message: Prepare for a changed audio format!";
 		default:
 			return "I have no idea - an unknown error code!";
 	}
