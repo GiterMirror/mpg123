@@ -111,34 +111,25 @@ else
 	AC_DEFINE(DYNAMIC_BUILD, 1, [ Define if building with dynamcally linked libmpg123])
 fi
 
-if test x"$modules" = xdisabled
+if test x"$modules" = xauto
 then
-	echo "Modules disabled, not checking for libltdl."
-else
-	have_ltdl=no
 	AC_CHECK_LIB( [ltdl], [lt_dlinit],
 		[ AC_CHECK_HEADER( [ltdl.h],
 			[
-				have_ltdl=yes
+				modules=enabled
+				LIBS="-lltdl $LIBS"
 				AC_DEFINE(HAVE_LTDL, 1, [ Define if libltdl is available ])
 			],
 			[
+				modules=disabled
 				AC_MSG_WARN([Found ltdl library but NOT the header file on your system])
 			] )
 		],
 		[
+			modules=disabled
 			AC_MSG_WARN([ltdl library not found])
 		]
 	)
-	if test x"$modules" = xenabled -a x"$have_ltdl" = xno; then
-		AC_MSG_ERROR([Modules enabled but no libltdl found! This will not work...])
-	fi
-	if test x"$modules" = xauto -a x"$have_ltdl" = xyes; then
-		modules=enabled
-		echo "We found libltdl: Modules enabled."
-	else
-		modules=disabled
-	fi
 fi
 
 if test x"$modules" = xdisabled
@@ -460,8 +451,6 @@ AC_ARG_WITH([cpu], [
   --with-cpu=x86-64       Use code optimized for x86-64 processors (AMD64 and Intel64)
   --with-cpu=x86-64_dither x86-64 code together with generic dithering (runtime selection)
   --with-cpu=altivec      Use code optimized for Altivec processors (PowerPC G4 and G5)
-  --with-cpu=ppc_nofpu    Use code optimized for PowerPC processors with fixed point arithmetic (experimental)
-  --with-cpu=arm_nofpu    Use code optimized for ARM processors with fixed point arithmetic (experimental)
 ])
 
 
@@ -481,9 +470,9 @@ fi
 
 
 case $target in
-  arm*-*-linux*)
+  arm-*-linux*)
     # check that... perhaps we are better off on arm with kernel math emulation
-    cpu_type="arm_nofpu"
+    cpu_type="generic_nofpu"
   ;;
   i386-*-linux*|i386-*-kfreebsd*-gnu)
     cpu_type="i386_fpu"
@@ -618,21 +607,6 @@ if test "x$with_cpu" != "x"; then
 fi
 
 if test "x$cpu_type" = "xgeneric_nofpu"; then
-  real=disabled
-  int32=disabled
-fi
-
-if test "x$cpu_type" = "xi386_nofpu"; then
-  real=disabled
-  int32=disabled
-fi
-
-if test "x$cpu_type" = "xppc_nofpu"; then
-  real=disabled
-  int32=disabled
-fi
-
-if test "x$cpu_type" = "xarm_nofpu"; then
   real=disabled
   int32=disabled
 fi
@@ -1032,11 +1006,9 @@ s_x86multi="getcpuflags"
 if test "x$integers" = "xquality"; then
   s_sse="$s_sse synth_sse_accurate synth_stereo_sse_accurate"
   s_x86_64="$s_x86_64 synth_x86_64_accurate synth_stereo_x86_64_accurate"
-  s_arm="synth_arm_accurate"
 else
   s_sse="$s_sse synth_sse" # no stereo
   s_x86_64="$s_x86_64 synth_x86_64 synth_stereo_x86_64"
-  s_arm="synth_arm"
 fi
 
 dnl CPU specific compiler flags and sources
@@ -1060,16 +1032,6 @@ dnl Not disabling buffer for float mode... check that this is OK now!
   generic_nofpu)
     ADD_CPPFLAGS="$ADD_CPPFLAGS -DOPT_GENERIC -DREAL_IS_FIXED"
     more_sources=
-    ccalign=no
-  ;;
-  ppc_nofpu)
-    ADD_CPPFLAGS="$ADD_CPPFLAGS -DOPT_GENERIC -DOPT_PPC -DREAL_IS_FIXED"
-    more_sources=
-    ccalign=no
-  ;;
-  arm_nofpu)
-    ADD_CPPFLAGS="$ADD_CPPFLAGS -DOPT_ARM -DREAL_IS_FIXED"
-    more_sources="$s_arm"
     ccalign=no
   ;;
   altivec)
@@ -1732,11 +1694,6 @@ fi
 AC_DEFINE_UNQUOTED(INDEX_SIZE, $seektable, [size of the frame index seek table])
 
 dnl ############## Final Output
-
-# Do that here to prevent the above tests usign -lltdl...
-if test "x$modules" = xenabled; then
-  LIBS="-lltdl $LIBS"
-fi
 
 AC_CONFIG_FILES([
 	Makefile

@@ -686,18 +686,18 @@ int main(int argc, char *argv[])
 	struct timeval start_time;
 #endif
 
-	/* Extract binary and path, take stuff before/after last / or \ . */
-	if((prgName = strrchr(argv[0], '/')) || (prgName = strrchr(argv[0], '\\')))
 	{
-		/* There is some explicit path. */
-		prgName[0] = 0; /* End byte for path. */
-		prgName++;
+		/* Hack the path of the binary... needed for relative module search. */
+		int i;
 		binpath = argv[0];
-	}
-	else
-	{
-		prgName = argv[0]; /* No path separators there. */
-		binpath = NULL; /* No path at all. */
+		for(i=strlen(binpath)-1; i>-1; --i)
+		if(binpath[i] == '/' || binpath[i] == '\\')
+		{
+			binpath[i] = 0;
+			break;
+		}
+		if(i==-1) /* No directory separator found, no path prefix. */
+		binpath = NULL;
 	}
 
 	/* Need to initialize mpg123 lib here for default parameter values. */
@@ -732,6 +732,8 @@ int main(int argc, char *argv[])
 #ifdef OS2
         _wildcard(&argc,&argv);
 #endif
+
+	(prgName = strrchr(argv[0], '/')) ? prgName++ : (prgName = argv[0]);
 
 	while ((result = getlopt(argc, argv, opts)))
 	switch (result) {

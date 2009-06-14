@@ -110,8 +110,6 @@ EXTRA_libmpg123_la_SOURCES = \
 	synth_stereo_x86_64_float.S \
 	synth_stereo_x86_64_s32.S \
 	synth_stereo_x86_64_accurate.S \
-	synth_arm.S \
-	synth_arm_accurate.S \
 	ntom.c \
 	synth.c \
 	synth_8bit.c \
@@ -120,9 +118,7 @@ EXTRA_libmpg123_la_SOURCES = \
 	equalizer_3dnow.S \
 	tabinit_mmx.S \
 	stringbuf.c \
-	getcpuflags.S \
-	l12_integer_tables.h \
-	l3_integer_tables.h
+	getcpuflags.S
 
 dnoise.c: dnoise.dat dnoise.sh
 	sh "$(top_srcdir)/src/libmpg123/dnoise.sh" "$<" > "$@"
