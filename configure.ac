@@ -11,7 +11,7 @@ AC_PREREQ(2.57)
 dnl ############# Initialisation
 
 AC_INIT([mpg123], [1.8.0], [mpg123-devel@lists.sourceforge.net])
-LIBMPG123_VERSION=18:11:18
+LIBMPG123_VERSION=18:12:18
 AC_SUBST(LIBMPG123_VERSION)
 
 AC_CONFIG_SRCDIR(src/mpg123.c)
@@ -607,6 +607,11 @@ if test "x$with_cpu" != "x"; then
 fi
 
 if test "x$cpu_type" = "xgeneric_nofpu"; then
+  real=disabled
+  int32=disabled
+fi
+
+if test "x$cpu_type" = "xi386_nofpu"; then
   real=disabled
   int32=disabled
 fi

@@ -150,6 +150,24 @@ static unsigned int i_slen2[256]; /* MPEG 2.0 slen for intensity stereo */
 static real tan1_1[16],tan2_1[16],tan1_2[16],tan2_2[16];
 static real pow1_1[2][16],pow2_1[2][16],pow1_2[2][16],pow2_2[2][16];
 
+#ifdef REAL_IS_FIXED
+static const char gainpow2_scale[256+118+4+1] = 
+{
+	19,19,19,20,20,20,20,21,21,21,21,22,22,22,22,23,23,23,23,24,24,24,24,25,25,25,25,26,26,26,26,27,
+	27,27,27,28,28,28,28,29,29,29,29,30,30,30,30,31,31,31,31,32,32,32,32,33,33,33,33,34,34,34,34,34,
+	34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,
+	34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,
+	34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,
+	34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,
+	34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,
+	34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,
+	34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,
+	34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,
+	34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,
+	34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,0
+};
+#endif
+
 /* Some helpers used in init_layer3 */
 
 #ifdef OPT_MMXORSSE
@@ -162,7 +180,7 @@ real init_layer3_gainpow2_mmx(mpg123_handle *fr, int i)
 
 real init_layer3_gainpow2(mpg123_handle *fr, int i)
 {
-	return DOUBLE_TO_REAL(pow((double)2.0,-0.25 * (double) (i+210)));
+	return DOUBLE_TO_REAL_SCALE_LAYER3(pow((double)2.0,-0.25 * (double) (i+210)),i+256);
 }
 
 
@@ -172,7 +190,7 @@ void init_layer3(void)
 	int i,j,k,l;
 
 	for(i=0;i<8207;i++)
-	ispow[i] = DOUBLE_TO_REAL(pow((double)i,(double)4.0/3.0));
+	ispow[i] = DOUBLE_TO_REAL_POW43(pow((double)i,(double)4.0/3.0));
 
 	for(i=0;i<8;i++)
 	{
@@ -237,10 +255,10 @@ void init_layer3(void)
 	for(i=0;i<16;i++)
 	{
 		double t = tan( (double) i * M_PI / 12.0 );
-		tan1_1[i] = DOUBLE_TO_REAL(t / (1.0+t));
-		tan2_1[i] = DOUBLE_TO_REAL(1.0 / (1.0 + t));
-		tan1_2[i] = DOUBLE_TO_REAL(M_SQRT2 * t / (1.0+t));
-		tan2_2[i] = DOUBLE_TO_REAL(M_SQRT2 / (1.0 + t));
+		tan1_1[i] = DOUBLE_TO_REAL_15(t / (1.0+t));
+		tan2_1[i] = DOUBLE_TO_REAL_15(1.0 / (1.0 + t));
+		tan1_2[i] = DOUBLE_TO_REAL_15(M_SQRT2 * t / (1.0+t));
+		tan2_2[i] = DOUBLE_TO_REAL_15(M_SQRT2 / (1.0 + t));
 
 		for(j=0;j<2;j++)
 		{
@@ -251,10 +269,10 @@ void init_layer3(void)
 				if( i & 1 ) p1 = pow(base,(i+1.0)*0.5);
 				else p2 = pow(base,i*0.5);
 			}
-			pow1_1[j][i] = DOUBLE_TO_REAL(p1);
-			pow2_1[j][i] = DOUBLE_TO_REAL(p2);
-			pow1_2[j][i] = DOUBLE_TO_REAL(M_SQRT2 * p1);
-			pow2_2[j][i] = DOUBLE_TO_REAL(M_SQRT2 * p2);
+			pow1_1[j][i] = DOUBLE_TO_REAL_15(p1);
+			pow2_1[j][i] = DOUBLE_TO_REAL_15(p2);
+			pow1_2[j][i] = DOUBLE_TO_REAL_15(M_SQRT2 * p1);
+			pow2_2[j][i] = DOUBLE_TO_REAL_15(M_SQRT2 * p2);
 		}
 	}
 
@@ -693,6 +711,9 @@ static int III_dequantize_sample(mpg123_handle *fr, real xr[SBLIMIT][SSLIMIT],in
 	int l[3],l3;
 	int part2remain = gr_info->part2_3_length - part2bits;
 	int *me;
+#ifdef REAL_IS_FIXED
+	int gainpow2_scale_idx = 378;
+#endif
 
 	/* mhipp tree has this split up a bit... */
 	int num=getbitoffset(fr);
@@ -780,11 +801,17 @@ static int III_dequantize_sample(mpg123_handle *fr, real xr[SBLIMIT][SSLIMIT],in
 					cb    = *m++;
 					if(lwin == 3)
 					{
+#ifdef REAL_IS_FIXED
+						gainpow2_scale_idx = (int)(gr_info->pow2gain + (*scf << shift) - fr->gainpow2);
+#endif
 						v = gr_info->pow2gain[(*scf++) << shift];
 						step = 1;
 					}
 					else
 					{
+#ifdef REAL_IS_FIXED
+						gainpow2_scale_idx = (int)(gr_info->full_gain[lwin] + (*scf << shift) - fr->gainpow2);
+#endif
 						v = gr_info->full_gain[lwin][(*scf++) << shift];
 						step = 3;
 					}
@@ -809,16 +836,16 @@ static int III_dequantize_sample(mpg123_handle *fr, real xr[SBLIMIT][SSLIMIT],in
 					x += ((unsigned long) mask) >> (BITSHIFT+8-h->linbits);
 					num -= h->linbits+1;
 					mask <<= h->linbits;
-					if(mask < 0) *xrpnt = REAL_MUL(-ispow[x], v);
-					else         *xrpnt = REAL_MUL( ispow[x], v);
+					if(mask < 0) *xrpnt = REAL_MUL_SCALE_LAYER3(-ispow[x], v, gainpow2_scale_idx);
+					else         *xrpnt = REAL_MUL_SCALE_LAYER3( ispow[x], v, gainpow2_scale_idx);
 
 					mask <<= 1;
 				}
 				else if(x)
 				{
 					max[lwin] = cb;
-					if(mask < 0) *xrpnt = REAL_MUL(-ispow[x], v);
-					else         *xrpnt = REAL_MUL( ispow[x], v);
+					if(mask < 0) *xrpnt = REAL_MUL_SCALE_LAYER3(-ispow[x], v, gainpow2_scale_idx);
+					else         *xrpnt = REAL_MUL_SCALE_LAYER3( ispow[x], v, gainpow2_scale_idx);
 
 					num--;
 					mask <<= 1;
@@ -833,16 +860,16 @@ static int III_dequantize_sample(mpg123_handle *fr, real xr[SBLIMIT][SSLIMIT],in
 					y += ((unsigned long) mask) >> (BITSHIFT+8-h->linbits);
 					num -= h->linbits+1;
 					mask <<= h->linbits;
-					if(mask < 0) *xrpnt = REAL_MUL(-ispow[y], v);
-					else         *xrpnt = REAL_MUL( ispow[y], v);
+					if(mask < 0) *xrpnt = REAL_MUL_SCALE_LAYER3(-ispow[y], v, gainpow2_scale_idx);
+					else         *xrpnt = REAL_MUL_SCALE_LAYER3( ispow[y], v, gainpow2_scale_idx);
 
 					mask <<= 1;
 				}
 				else if(y)
 				{
 					max[lwin] = cb;
-					if(mask < 0) *xrpnt = REAL_MUL(-ispow[y], v);
-					else         *xrpnt = REAL_MUL( ispow[y], v);
+					if(mask < 0) *xrpnt = REAL_MUL_SCALE_LAYER3(-ispow[y], v, gainpow2_scale_idx);
+					else         *xrpnt = REAL_MUL_SCALE_LAYER3( ispow[y], v, gainpow2_scale_idx);
 
 					num--;
 					mask <<= 1;
@@ -903,11 +930,17 @@ static int III_dequantize_sample(mpg123_handle *fr, real xr[SBLIMIT][SSLIMIT],in
 						cb = *m++;
 						if(lwin == 3)
 						{
+#ifdef REAL_IS_FIXED
+							gainpow2_scale_idx = (int)(gr_info->pow2gain + (*scf << shift) - fr->gainpow2);
+#endif
 							v = gr_info->pow2gain[(*scf++) << shift];
 							step = 1;
 						}
 						else
 						{
+#ifdef REAL_IS_FIXED
+							gainpow2_scale_idx = (int)(gr_info->full_gain[lwin] + (*scf << shift) - fr->gainpow2);
+#endif
 							v = gr_info->full_gain[lwin][(*scf++) << shift];
 							step = 3;
 						}
@@ -920,8 +953,8 @@ static int III_dequantize_sample(mpg123_handle *fr, real xr[SBLIMIT][SSLIMIT],in
 					if(part2remain+num <= 0)
 					break;
 
-					if(mask < 0) *xrpnt = -v;
-					else         *xrpnt =  v;
+					if(mask < 0) *xrpnt = -REAL_SCALE_LAYER3(v, gainpow2_scale_idx);
+					else         *xrpnt =  REAL_SCALE_LAYER3(v, gainpow2_scale_idx);
 
 					num--;
 					mask <<= 1;
@@ -993,8 +1026,12 @@ static int III_dequantize_sample(mpg123_handle *fr, real xr[SBLIMIT][SSLIMIT],in
 						v = 0.0;
 					else
 #endif
-						v = gr_info->pow2gain[((*scf++) + (*pretab++)) << shift];
-
+					{
+#ifdef REAL_IS_FIXED
+						gainpow2_scale_idx = (int)(gr_info->pow2gain + (*scf << shift) - fr->gainpow2);
+#endif
+						v = gr_info->pow2gain[(*(scf++) + (*pretab++)) << shift];
+					}
 				}
 				{
 					register short *val = h->table;
@@ -1017,16 +1054,16 @@ static int III_dequantize_sample(mpg123_handle *fr, real xr[SBLIMIT][SSLIMIT],in
 					x += ((unsigned long) mask) >> (BITSHIFT+8-h->linbits);
 					num -= h->linbits+1;
 					mask <<= h->linbits;
-					if(mask < 0) *xrpnt++ = REAL_MUL(-ispow[x], v);
-					else         *xrpnt++ = REAL_MUL( ispow[x], v);
+					if(mask < 0) *xrpnt++ = REAL_MUL_SCALE_LAYER3(-ispow[x], v, gainpow2_scale_idx);
+					else         *xrpnt++ = REAL_MUL_SCALE_LAYER3( ispow[x], v, gainpow2_scale_idx);
 
 					mask <<= 1;
 				}
 				else if(x)
 				{
 					max = cb;
-					if(mask < 0) *xrpnt++ = REAL_MUL(-ispow[x], v);
-					else         *xrpnt++ = REAL_MUL( ispow[x], v);
+					if(mask < 0) *xrpnt++ = REAL_MUL_SCALE_LAYER3(-ispow[x], v, gainpow2_scale_idx);
+					else         *xrpnt++ = REAL_MUL_SCALE_LAYER3( ispow[x], v, gainpow2_scale_idx);
 					num--;
 
 					mask <<= 1;
@@ -1040,16 +1077,16 @@ static int III_dequantize_sample(mpg123_handle *fr, real xr[SBLIMIT][SSLIMIT],in
 					y += ((unsigned long) mask) >> (BITSHIFT+8-h->linbits);
 					num -= h->linbits+1;
 					mask <<= h->linbits;
-					if(mask < 0) *xrpnt++ = REAL_MUL(-ispow[y], v);
-					else         *xrpnt++ = REAL_MUL(ispow[y], v);
+					if(mask < 0) *xrpnt++ = REAL_MUL_SCALE_LAYER3(-ispow[y], v, gainpow2_scale_idx);
+					else         *xrpnt++ = REAL_MUL_SCALE_LAYER3( ispow[y], v, gainpow2_scale_idx);
 
 					mask <<= 1;
 				}
 				else if(y)
 				{
 					max = cb;
-					if(mask < 0) *xrpnt++ = REAL_MUL(-ispow[y], v);
-					else         *xrpnt++ = REAL_MUL(ispow[y], v);
+					if(mask < 0) *xrpnt++ = REAL_MUL_SCALE_LAYER3(-ispow[y], v, gainpow2_scale_idx);
+					else         *xrpnt++ = REAL_MUL_SCALE_LAYER3( ispow[y], v, gainpow2_scale_idx);
 
 					num--;
 					mask <<= 1;
@@ -1091,7 +1128,12 @@ static int III_dequantize_sample(mpg123_handle *fr, real xr[SBLIMIT][SSLIMIT],in
 							v = 0.0;
 						else
 #endif
+						{
+#ifdef REAL_IS_FIXED
+							gainpow2_scale_idx = (int)(gr_info->pow2gain + (*scf << shift) - fr->gainpow2);
+#endif
 							v = gr_info->pow2gain[((*scf++) + (*pretab++)) << shift];
+						}
 					}
 					mc--;
 				}
@@ -1101,8 +1143,8 @@ static int III_dequantize_sample(mpg123_handle *fr, real xr[SBLIMIT][SSLIMIT],in
 					if(part2remain+num <= 0)
 					break;
 
-					if(mask < 0) *xrpnt++ = -v;
-					else         *xrpnt++ =  v;
+					if(mask < 0) *xrpnt++ = -REAL_SCALE_LAYER3(v, gainpow2_scale_idx);
+					else         *xrpnt++ =  REAL_SCALE_LAYER3(v, gainpow2_scale_idx);
 
 					num--;
 					mask <<= 1;
@@ -1211,8 +1253,8 @@ static void III_i_stereo(real xr_buf[2][SBLIMIT][SSLIMIT],int *scalefac, struct 
 					for (; sb > 0; sb--,idx+=3)
 					{
 						real v = xr[0][idx];
-						xr[0][idx] = REAL_MUL(v, t1);
-						xr[1][idx] = REAL_MUL(v, t2);
+						xr[0][idx] = REAL_MUL_15(v, t1);
+						xr[1][idx] = REAL_MUL_15(v, t2);
 					}
 				}
 			}
@@ -1235,8 +1277,8 @@ maybe still wrong??? (copy 12 to 13?) */
 				for( ; sb > 0; sb--,idx+=3 )
 				{  
 					real v = xr[0][idx];
-					xr[0][idx] = REAL_MUL(v, t1);
-					xr[1][idx] = REAL_MUL(v, t2);
+					xr[0][idx] = REAL_MUL_15(v, t1);
+					xr[1][idx] = REAL_MUL_15(v, t2);
 				}
 			}
 		} /* end for(lwin; .. ; . ) */
@@ -1260,8 +1302,8 @@ maybe still wrong??? (copy 12 to 13?) */
 					for( ; sb > 0; sb--,idx++)
 					{
 						real v = xr[0][idx];
-						xr[0][idx] = REAL_MUL(v, t1);
-						xr[1][idx] = REAL_MUL(v, t2);
+						xr[0][idx] = REAL_MUL_15(v, t1);
+						xr[1][idx] = REAL_MUL_15(v, t2);
 					}
 				}
 				else idx += sb;
@@ -1286,8 +1328,8 @@ maybe still wrong??? (copy 12 to 13?) */
 				for( ; sb > 0; sb--,idx++)
 				{
 					 real v = xr[0][idx];
-					 xr[0][idx] = REAL_MUL(v, t1);
-					 xr[1][idx] = REAL_MUL(v, t2);
+					 xr[0][idx] = REAL_MUL_15(v, t1);
+					 xr[1][idx] = REAL_MUL_15(v, t2);
 				}
 			}
 			else idx += sb;
@@ -1302,8 +1344,8 @@ maybe still wrong??? (copy 12 to 13?) */
 			for( sb = bi->longDiff[21]; sb > 0; sb--,idx++ )
 			{
 				real v = xr[0][idx];
-				xr[0][idx] = REAL_MUL(v, t1);
-				xr[1][idx] = REAL_MUL(v, t2);
+				xr[0][idx] = REAL_MUL_15(v, t1);
+				xr[1][idx] = REAL_MUL_15(v, t2);
 			}
 		}
 	}

@@ -67,13 +67,22 @@
 
 # define real long
 
-# define REAL_RADIX            15
-# define REAL_FACTOR           (32.0 * 1024.0)
+# define REAL_RADIX				24
+# define REAL_FACTOR			16777216.0
 
 /* I just changed the (int) to (long) there... seemed right. */
-# define DOUBLE_TO_REAL(x)     ((long)((x) * REAL_FACTOR))
-# define REAL_TO_DOUBLE(x)     ((double)(x) / REAL_FACTOR)
-# define REAL_MUL(x, y)                (((long long)(x) * (long long)(y)) >> REAL_RADIX)
+# define DOUBLE_TO_REAL(x)					((long)((x) * REAL_FACTOR))
+# define DOUBLE_TO_REAL_15(x)				((long)((x) * 32768.0))
+# define DOUBLE_TO_REAL_POW43(x)			((long)((x) * 8192.0))
+# define DOUBLE_TO_REAL_SCALE_LAYER12(x)	((long)((x) * 1073741824.0))
+# define DOUBLE_TO_REAL_SCALE_LAYER3(x, y)	((long)((x) * pow(2.0,gainpow2_scale[y])))
+# define REAL_TO_DOUBLE(x)					((double)(x) / REAL_FACTOR)
+# define REAL_MUL(x, y)						(((long long)(x) * (long long)(y)) >> REAL_RADIX)
+# define REAL_MUL_15(x, y)					(((long long)(x) * (long long)(y)) >> 15)
+# define REAL_MUL_SCALE_LAYER12(x, y)		(((long long)(x) * (long long)(y)) >> (15 + 30 - REAL_RADIX))
+# define REAL_MUL_SCALE_LAYER3(x, y, z)		(((long long)(x) * (long long)(y)) >> (13 + gainpow2_scale[z] - REAL_RADIX))
+# define REAL_SCALE_LAYER12(x)				((long)((x) >> (30 - REAL_RADIX)))
+# define REAL_SCALE_LAYER3(x, y)			((long)((x) >> (gainpow2_scale[y] - REAL_RADIX)))
 #  define REAL_SCANF "%ld"
 #  define REAL_PRINTF "%ld"
 
@@ -90,14 +99,41 @@
 #endif
 
 #ifndef DOUBLE_TO_REAL
-# define DOUBLE_TO_REAL(x)     (real)(x)
+# define DOUBLE_TO_REAL(x)					(real)(x)
+#endif
+#ifndef DOUBLE_TO_REAL_15
+# define DOUBLE_TO_REAL_15(x)				(real)(x)
+#endif
+#ifndef DOUBLE_TO_REAL_POW43
+# define DOUBLE_TO_REAL_POW43(x)			(real)(x)
+#endif
+#ifndef DOUBLE_TO_REAL_SCALE_LAYER12
+# define DOUBLE_TO_REAL_SCALE_LAYER12(x)	(real)(x)
+#endif
+#ifndef DOUBLE_TO_REAL_SCALE_LAYER3
+# define DOUBLE_TO_REAL_SCALE_LAYER3(x, y)	(real)(x)
 #endif
 #ifndef REAL_TO_DOUBLE
-# define REAL_TO_DOUBLE(x)     (x)
+# define REAL_TO_DOUBLE(x)					(x)
 #endif
 
 #ifndef REAL_MUL
-# define REAL_MUL(x, y)                ((x) * (y))
+# define REAL_MUL(x, y)						((x) * (y))
+#endif
+#ifndef REAL_MUL_15
+# define REAL_MUL_15(x, y)					((x) * (y))
+#endif
+#ifndef REAL_MUL_SCALE_LAYER12
+# define REAL_MUL_SCALE_LAYER12(x, y)		((x) * (y))
+#endif
+#ifndef REAL_MUL_SCALE_LAYER3
+# define REAL_MUL_SCALE_LAYER3(x, y, z)		((x) * (y))
+#endif
+#ifndef REAL_SCALE_LAYER12
+# define REAL_SCALE_LAYER12(x)				(x)
+#endif
+#ifndef REAL_SCALE_LAYER3
+# define REAL_SCALE_LAYER3(x, y)			(x)
 #endif
 
 /* used to be: AUDIOBUFSIZE = n*64 with n=1,2,3 ...
