@@ -700,7 +700,8 @@ static int zero_byte(mpg123_handle *fr)
 */
 void decode_the_frame(mpg123_handle *fr)
 {
-	size_t needed_bytes = samples_to_bytes(fr, frame_expect_outsamples(fr)); 	fr->clip += (fr->do_layer)(fr);
+	size_t needed_bytes = samples_to_bytes(fr, frame_outs(fr, fr->num+1)-frame_outs(fr, fr->num));
+	fr->clip += (fr->do_layer)(fr);
 	/*fprintf(stderr, "frame %"OFF_P": got %"SIZE_P" / %"SIZE_P"\n", fr->num,(size_p)fr->buffer.fill, (size_p)needed_bytes);*/
 	/* There could be less data than promised.
 	   Also, then debugging, we look out for coding errors that could result in _more_ data than expected. */
@@ -896,8 +897,7 @@ int attribute_align_arg mpg123_decode(mpg123_handle *mh, const unsigned char *in
 			{
 				debug("notifiying new format");
 				mh->new_format = 0;
-				ret = MPG123_NEW_FORMAT;
-				goto decodeend;
+				return MPG123_NEW_FORMAT;
 			}
 			if(mh->buffer.size - mh->buffer.fill < mh->outblock)
 			{
@@ -1452,28 +1452,6 @@ int attribute_align_arg mpg123_index(mpg123_handle *mh, off_t **offsets, off_t *
 	*fill    = 0;
 #endif
 	return MPG123_OK;
-}
-
-int attribute_align_arg mpg123_set_index(mpg123_handle *mh, off_t *offsets, off_t step, size_t fill)
-{
-	ALIGNCHECK(mh);
-	if(mh == NULL) return MPG123_ERR;
-#ifdef FRAME_INDEX
-	if(step == 0)
-	{
-		mh->err = MPG123_BAD_INDEX_PAR;
-		return MPG123_ERR;
-	}
-	if(fi_set(&mh->index, offsets, step, fill) == -1)
-	{
-		mh->err = MPG123_OUT_OF_MEM;
-		return MPG123_ERR;
-	}
-	return MPG123_OK;
-#else
-	mh->err = MPG123_MISSING_FEATURE;
-	return MPG123_ERR;
-#endif
 }
 
 int attribute_align_arg mpg123_close(mpg123_handle *mh)

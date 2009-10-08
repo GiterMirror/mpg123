@@ -10,8 +10,8 @@ AC_PREREQ(2.57)
 
 dnl ############# Initialisation
 
-AC_INIT([mpg123], [1.10.0], [mpg123-devel@lists.sourceforge.net])
-LIBMPG123_VERSION=21:2:21
+AC_INIT([mpg123], [1.9.0], [mpg123-devel@lists.sourceforge.net])
+LIBMPG123_VERSION=20:1:20
 AC_SUBST(LIBMPG123_VERSION)
 
 AC_CONFIG_SRCDIR(src/mpg123.c)
@@ -505,19 +505,6 @@ case $host in
   *-*-linux*|*-*-kfreebsd*-gnu)
     cpu_type="generic_fpu"
   ;;
-  i386-apple-darwin10*)
-    AC_MSG_CHECKING([if CPU type supports x86-64])
-    case `sysctl -n hw.optional.x86_64` in
-      1)
-        AC_MSG_RESULT([yes])
-        cpu_type="x86-64_all"
-      ;;
-      *)
-        AC_MSG_RESULT([no])
-        cpu_type="x86"
-      ;;
-    esac
-  ;;
   i386-apple-darwin*)
     cpu_type="x86"
   ;;
@@ -571,15 +558,10 @@ case $host in
   *-pc-cygwin*)
     cpu_type="generic_fpu"
   ;;
-  i@<:@3-7@:>@86-*-mingw32*)
+  *-*-mingw32)
     LIBS="$LIBS"
     buffer=disabled
     cpu_type="x86"
-  ;;
-  x86_64-*-mingw32*)
-    LIBS="$LIBS"
-    buffer=disabled
-    cpu_type="x86-64"
   ;;
 	i386-*)
 		AC_MSG_WARN([Unknown host operating system])
@@ -851,7 +833,8 @@ else
 fi
 
 dnl Insert the function name redefinitions and export symbols as needed.
-dnl ...based on these two variables and manual work in src/libmpg123/mpg123.h.in .
+dnl ...based on these two variables and manual work in src/libmpg123/mpg123.h.in
+dnl as well as src/libmpg123/libmpg123.sym.in .
 AC_SUBST(LARGEFILE_BITS)
 AC_SUBST(LARGEFILE_SUFFIX)
 AC_SUBST(LARGEFILE_SWITCH)
@@ -1183,32 +1166,13 @@ case $cpu_type in
       i386-apple-darwin8*)
         ADD_LDFLAGS="$ADD_LDFLAGS -Wl,-read_only_relocs,suppress"
       ;;
-      i386-apple-darwin9*|i386-apple-darwin10*)
+      i386-apple-darwin9*)
         ADD_CFLAGS="$ADD_CFLAGS -mmacosx-version-min=10.4 -isysroot /Developer/SDKs/MacOSX10.4u.sdk"
         ADD_LDFLAGS="$ADD_LDFLAGS -Wl,-syslibroot,/Developer/SDKs/MacOSX10.4u.sdk -Wl,-classic_linker -Wl,-read_only_relocs,suppress"
       ;;
     esac
   ;;
 esac
-
-# Check if we want feature report function.
-AC_MSG_CHECKING([if we want feature report function])
-feature_report=enabled
-AC_ARG_ENABLE(feature_report,
-	[  --disable-feature_report Disable feature report function ],
-	[
-		if test "x$enableval" = xno; then
-		AC_MSG_RESULT([no])
-		feature_report=disabled
-		else
-		AC_MSG_RESULT([yes])
-		fi
-	],
-	[AC_MSG_RESULT([yes])])
-
-if test "x$feature_report" = xenabled; then
-	more_sources="$more_sources feature"
-fi
 
 for i in $more_sources
 do
@@ -1808,21 +1772,6 @@ fi
 # Define that always... also without frame index enabled.
 AC_DEFINE_UNQUOTED(INDEX_SIZE, $seektable, [size of the frame index seek table])
 
-# Check if we want Unicode for Win32.
-win32_unicode=disabled
-AC_MSG_CHECKING([if we want Unicode File Open for Win32])
-AC_ARG_ENABLE(win32_unicode,
-	[  --enable-win32_unicode=[no/yes] Enable Unicode for Win32 ],
-	[   
-	   if test "x$enableval" = xyes; then
-		AC_DEFINE(WANT_WIN32_UNICODE, 1, [ Define to use Unicode for Windows ])
-		win32_unicode=enabled
-		AC_MSG_RESULT([yes])
-	   fi
-	], [AC_MSG_RESULT([no])])
-
-AM_CONDITIONAL([WIN32_USE_UNICODE], [ test "x$win32_unicode" = xenabled])
-
 dnl ############## Final Output
 
 # Do that here to prevent the above tests usign -lltdl...
@@ -1833,12 +1782,12 @@ fi
 AC_CONFIG_FILES([
 	Makefile
 	libmpg123.pc
-	mpg123.spec
 	doc/Makefile
 	src/Makefile
 	src/output/Makefile
 	src/libmpg123/Makefile
 	src/libmpg123/mpg123.h
+	src/libmpg123/libmpg123.sym
 ])
 
 AC_OUTPUT
@@ -1883,8 +1832,6 @@ echo -n "
   String API .............. $string
   ICY parsing/conversion .. $icy
   Error/warning messages .. $messages
-  Win32 Unicode File Open.. $win32_unicode
-  Feature Report Function.. $feature_report
   Output formats (nofpu will disable all but 16 or 8 bit!):
   8 bit integer ........... $int8
   16 bit integer .......... $int16

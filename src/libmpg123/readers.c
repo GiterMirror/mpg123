@@ -12,18 +12,24 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <errno.h>
-/* For select(), I need select.h according to POSIX 2001, else: sys/time.h sys/types.h unistd.h (the latter two included in compat.h already). */
+/* For select(), I need select.h according to POSIX 2001, else: sys/time.h sys/types.h unistd.h */
+/* Including these here although it works without on my Linux install... curious about _why_. */
 #ifdef HAVE_SYS_SELECT_H
 #include <sys/select.h>
 #endif
 #ifdef HAVE_SYS_TIME_H
 #include <sys/time.h>
 #endif
+#ifdef HAVE_SYS_TYPES_H
+#include <sys/types.h>
+#endif
+#ifdef HAVE_UNISTD_H
+#include <unistd.h>
+#endif
 #ifdef _MSC_VER
 #include <io.h>
 #endif
 
-#include "compat.h"
 #include "debug.h"
 
 static int default_init(mpg123_handle *fr);
@@ -228,7 +234,7 @@ static off_t stream_lseek(mpg123_handle *fr, off_t pos, int whence)
 
 static void stream_close(mpg123_handle *fr)
 {
-	if(fr->rdat.flags & READER_FD_OPENED) compat_close(fr->rdat.filept);
+	if(fr->rdat.flags & READER_FD_OPENED) close(fr->rdat.filept);
 	if(fr->rdat.flags & READER_BUFFERED)  bc_reset(&fr->rdat.buffer);
 }
 
@@ -510,23 +516,19 @@ static int bc_add(struct bufferchain *bc, const unsigned char *data, ssize_t siz
 	return ret;
 }
 
-/* Common handler for "You want more than I can give." situation. */
-static ssize_t bc_need_more(struct bufferchain *bc)
-{
-	debug3("hit end, back to beginning (%li - %li < %li)", (long)bc->size, (long)bc->pos, (long)size);
-	/* go back to firstpos, undo the previous reads */
-	bc->pos = bc->firstpos;
-	return READER_MORE;
-}
-
 /* Give some data, advancing position but not forgetting yet. */
 static ssize_t bc_give(struct bufferchain *bc, unsigned char *out, ssize_t size)
 {
 	struct buffy *b = bc->first;
 	ssize_t gotcount = 0;
 	ssize_t offset = 0;
-	if(bc->size - bc->pos < size) return bc_need_more(bc);
-
+	if(bc->size - bc->pos < size)
+	{
+		debug3("hit end, back to beginning (%li - %li < %li)", (long)bc->size, (long)bc->pos, (long)size);
+		/* go back to firstpos, undo the previous reads */
+		bc->pos = bc->firstpos;
+		return READER_MORE;
+	}
 	/* find the current buffer */
 	while(b != NULL && (offset + b->size) <= bc->pos)
 	{
@@ -563,7 +565,7 @@ static ssize_t bc_skip(struct bufferchain *bc, ssize_t count)
 {
 	if(count >= 0)
 	{
-		if(bc->size - bc->pos < count) return bc_need_more(bc);
+		if(bc->size - bc->pos < count) return READER_MORE;
 		else return bc->pos += count;
 	}
 	else return READER_ERROR;
@@ -641,11 +643,7 @@ static ssize_t feed_read(mpg123_handle *fr, unsigned char *out, ssize_t count)
 /* returns reached position... negative ones are bad... */
 static off_t feed_skip_bytes(mpg123_handle *fr,off_t len)
 {
-	/* This is either the new buffer offset or some negative error value. */
-	off_t res = bc_skip(&fr->rdat.buffer, (ssize_t)len);
-	if(res < 0) return res;
-
-	return fr->rdat.buffer.fileoff+res;
+	return fr->rdat.buffer.fileoff+bc_skip(&fr->rdat.buffer, (ssize_t)len);
 }
 
 static int feed_back_bytes(mpg123_handle *fr, off_t bytes)
@@ -987,7 +985,6 @@ int open_stream(mpg123_handle *fr, const char *bs_filenam, int fd)
 	int filept; /* descriptor of opened file/stream */
 
 	clear_icy(&fr->icy); /* can be done inside frame_clear ...? */
-
 	if(!bs_filenam) /* no file to open, got a descriptor (stdin) */
 	{
 		filept = fd;
@@ -996,7 +993,7 @@ int open_stream(mpg123_handle *fr, const char *bs_filenam, int fd)
 	#ifndef O_BINARY
 	#define O_BINARY (0)
 	#endif
-	else if((filept = compat_open(bs_filenam, O_RDONLY|O_BINARY)) < 0) /* a plain old file to open... */
+	else if((filept = open(bs_filenam, O_RDONLY|O_BINARY)) < 0) /* a plain old file to open... */
 	{
 		if(NOQUIET) error2("Cannot open file %s: %s", bs_filenam, strerror(errno));
 		fr->err = MPG123_BAD_FILE;

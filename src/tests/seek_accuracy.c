@@ -203,8 +203,7 @@ int check_sample(struct seeko *so, size_t i)
 	}
 	else
 	{
-		if(channels == 1) printf("sample %"SIZE_P" FAIL (%i != %i)\n", (size_p)i, buf[0], so->left[i]);
-		else printf("sample %"SIZE_P" FAIL (%i != %i || %i != %i)\n", (size_p)i, buf[0], so->left[i], buf[1], so->right[i]);
+		printf("sample %"SIZE_P" FAIL\n", (size_p)i);
 		return -1;
 	}
 	return 0;
