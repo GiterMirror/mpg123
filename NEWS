@@ -1,3 +1,14 @@
+1.9.1
+---
+- Fix OpenAL output issue (bug 2840085)
+- Fix theoretically possible discarding of some audio samples when getting a new format.
+- Fix unwanted verboseness (some error messages from library even when MPG123_QUIET was specified).
+- Fix back-to-beginning for feed_skip (fixes bug 2859531).
+- Fix the CPU creep bug with NtoM decoding.
+  That one has been nasty on you with large files since bad frame fillup has been introduced.
+- Fix regression (since 1.9.0) in ID3 parsing: Now Foobar2000 RVA fields are interpreted again (among others).
+- Fix some compiler warnings, minor cleanup.
+
 1.9.0
 ---
 
