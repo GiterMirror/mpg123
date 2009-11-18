@@ -10,8 +10,8 @@ AC_PREREQ(2.57)
 
 dnl ############# Initialisation
 
-AC_INIT([mpg123], [1.10.0], [mpg123-devel@lists.sourceforge.net])
-LIBMPG123_VERSION=21:3:21
+AC_INIT([mpg123], [1.9.1], [mpg123-devel@lists.sourceforge.net])
+LIBMPG123_VERSION=20:2:20
 AC_SUBST(LIBMPG123_VERSION)
 
 AC_CONFIG_SRCDIR(src/mpg123.c)
@@ -505,19 +505,6 @@ case $host in
   *-*-linux*|*-*-kfreebsd*-gnu)
     cpu_type="generic_fpu"
   ;;
-  i386-apple-darwin10*)
-    AC_MSG_CHECKING([if CPU type supports x86-64])
-    case `sysctl -n hw.optional.x86_64` in
-      1)
-        AC_MSG_RESULT([yes])
-        cpu_type="x86-64_all"
-      ;;
-      *)
-        AC_MSG_RESULT([no])
-        cpu_type="x86"
-      ;;
-    esac
-  ;;
   i386-apple-darwin*)
     cpu_type="x86"
   ;;
@@ -546,12 +533,7 @@ case $host in
   *-*-dragonfly* | *-*-freebsd* | *-*-midnightbsd* | *-*-mirbsd* | *-*-netbsd* | *-*-openbsd*)
     cpu_type="generic_fpu"
   ;;
-  i386-*-solaris*)
-    cpu_type=x86
-  ;;
-  x86_64-*-solaris*)
-    cpu_type=x86-64_all
-  ;;
+  # Todo: Add default for x86 solaris; need to test it there, too.
   *-*-solaris*)
     cpu_type="generic_fpu"
   ;;
@@ -576,15 +558,10 @@ case $host in
   *-pc-cygwin*)
     cpu_type="generic_fpu"
   ;;
-  i@<:@3-7@:>@86-*-mingw32*)
+  *-*-mingw32)
     LIBS="$LIBS"
     buffer=disabled
     cpu_type="x86"
-  ;;
-  x86_64-*-mingw32*)
-    LIBS="$LIBS"
-    buffer=disabled
-    cpu_type="x86-64"
   ;;
 	i386-*)
 		AC_MSG_WARN([Unknown host operating system])
@@ -856,7 +833,8 @@ else
 fi
 
 dnl Insert the function name redefinitions and export symbols as needed.
-dnl ...based on these two variables and manual work in src/libmpg123/mpg123.h.in .
+dnl ...based on these two variables and manual work in src/libmpg123/mpg123.h.in
+dnl as well as src/libmpg123/libmpg123.sym.in .
 AC_SUBST(LARGEFILE_BITS)
 AC_SUBST(LARGEFILE_SUFFIX)
 AC_SUBST(LARGEFILE_SWITCH)
@@ -918,6 +896,21 @@ if test x"$fifo" = xenabled; then
 	fi
 fi
 
+AC_CHECK_FUNCS( getaddrinfo, [ have_ipv6=yes ], [ have_ipv6=no ] )
+if test x"$ipv6" = xauto; then
+	if test x"$have_ipv6" = xyes; then
+		ipv6=enabled
+	else
+		ipv6=disabled
+	fi
+fi
+if test x"$ipv6" = xenabled; then
+	AC_DEFINE(IPV6, 1, [ Define if IPV6 support is enabled. ])
+	if test x"$have_ipv6" = xno; then
+		AC_MSG_WARN( [ You forced IPv6 code while I think there is no getaddrinfo() available! ] )
+	fi
+fi
+
 dnl ############## Header and Library Checks
 
 # locale headers
@@ -934,12 +927,6 @@ else
   have_network=no
 fi
 
-dnl trying to get that socket lib settled in one line
-AC_SEARCH_LIBS(gethostbyname, nsl socket ws2_32 wsock32) 
-dnl OK, two lines... Solaris needs -lnsl -lsocket
-AC_SEARCH_LIBS(socket, socket ws2_32 wsock32) 
-
-
 if test x"$network" = xauto; then
 	if test x"$have_network" = xyes; then
 		network=enabled
@@ -951,22 +938,6 @@ if test x"$network" = xenabled; then
 	AC_DEFINE(NETWORK, 1, [ Define if network support is enabled. ])
 	if test x"$have_network" = xno; then
 		AC_MSG_WARN( [ You forced network code while I think there is support missing! ] )
-	fi
-fi
-
-AC_CHECK_FUNCS( getaddrinfo, [ have_ipv6=yes ], [ have_ipv6=no ] )
-if test x"$ipv6" = xauto; then
-	if test x"$have_ipv6" = xyes; then
-		ipv6=enabled
-	else
-		ipv6=disabled
-	fi
-fi
-
-if test x"$ipv6" = xenabled; then
-	AC_DEFINE(IPV6, 1, [ Define if IPV6 support is enabled. ])
-	if test x"$have_ipv6" = xno; then
-		AC_MSG_WARN( [ You forced IPv6 code while I think there is no getaddrinfo() available! ] )
 	fi
 fi
 
@@ -1036,6 +1007,11 @@ case $host in
     AC_DEFINE(ABI_ALIGN_FUN, 1, [ Define if your architecture wants/needs/can use attribute_align_arg and alignment checks. It's for 32bit x86... ])
  ;;
 esac
+
+dnl trying to get that socket lib settled in one line
+AC_SEARCH_LIBS(gethostbyname, nsl socket ws2_32 wsock32) 
+dnl OK, two lines... Solaris needs -lnsl -lsocket
+AC_SEARCH_LIBS(socket, socket ws2_32 wsock32) 
 
 s_altivec="synth_altivec dct64_altivec"
 s_i386="dct64_i386"
@@ -1187,7 +1163,7 @@ esac
 case $cpu_type in
   3dnow|3dnow_alone|3dnowext|3dnowext_alone|mmx|mmx_alone|sse|sse_alone|x86|x86_dither)
     case $host in
-      i386-apple-darwin8*|*-apple-darwin10*)
+      i386-apple-darwin8*)
         ADD_LDFLAGS="$ADD_LDFLAGS -Wl,-read_only_relocs,suppress"
       ;;
       i386-apple-darwin9*)
@@ -1197,25 +1173,6 @@ case $cpu_type in
     esac
   ;;
 esac
-
-# Check if we want feature report function.
-AC_MSG_CHECKING([if we want feature report function])
-feature_report=enabled
-AC_ARG_ENABLE(feature_report,
-	[  --disable-feature_report Disable feature report function ],
-	[
-		if test "x$enableval" = xno; then
-		AC_MSG_RESULT([no])
-		feature_report=disabled
-		else
-		AC_MSG_RESULT([yes])
-		fi
-	],
-	[AC_MSG_RESULT([yes])])
-
-if test "x$feature_report" = xenabled; then
-	more_sources="$more_sources feature"
-fi
 
 for i in $more_sources
 do
@@ -1815,21 +1772,6 @@ fi
 # Define that always... also without frame index enabled.
 AC_DEFINE_UNQUOTED(INDEX_SIZE, $seektable, [size of the frame index seek table])
 
-# Check if we want Unicode for Win32.
-win32_unicode=disabled
-AC_MSG_CHECKING([if we want Unicode File Open for Win32])
-AC_ARG_ENABLE(win32_unicode,
-	[  --enable-win32_unicode=[no/yes] Enable Unicode for Win32 ],
-	[   
-	   if test "x$enableval" = xyes; then
-		AC_DEFINE(WANT_WIN32_UNICODE, 1, [ Define to use Unicode for Windows ])
-		win32_unicode=enabled
-		AC_MSG_RESULT([yes])
-	   fi
-	], [AC_MSG_RESULT([no])])
-
-AM_CONDITIONAL([WIN32_USE_UNICODE], [ test "x$win32_unicode" = xenabled])
-
 dnl ############## Final Output
 
 # Do that here to prevent the above tests usign -lltdl...
@@ -1840,12 +1782,12 @@ fi
 AC_CONFIG_FILES([
 	Makefile
 	libmpg123.pc
-	mpg123.spec
 	doc/Makefile
 	src/Makefile
 	src/output/Makefile
 	src/libmpg123/Makefile
 	src/libmpg123/mpg123.h
+	src/libmpg123/libmpg123.sym
 ])
 
 AC_OUTPUT
@@ -1890,8 +1832,6 @@ echo -n "
   String API .............. $string
   ICY parsing/conversion .. $icy
   Error/warning messages .. $messages
-  Win32 Unicode File Open.. $win32_unicode
-  Feature Report Function.. $feature_report
   Output formats (nofpu will disable all but 16 or 8 bit!):
   8 bit integer ........... $int8
   16 bit integer .......... $int16

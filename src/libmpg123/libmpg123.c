@@ -82,13 +82,9 @@ static void frame_buffercheck(mpg123_handle *fr)
 			        (void*)fr->buffer.p, (void*)fr->buffer.data, ((short*)fr->buffer.p)[2]);
 		}
 		else fr->buffer.fill = 0;
-		/* We can only reach this frame again by seeking. And on seeking, firstoff will be recomputed.
-		   So it is safe to null it here (and it makes the if() decision abort earlier). */
-		fr->firstoff = 0;
+		fr->firstoff = 0; /* Only enter here once... when you seek, firstoff should be reset. */
 	}
-	/* The last interesting (planned) frame: Only use some leading samples.
-	   Note a difference from the above: The last frame and offset are unchanges by seeks.
-	   The lastoff keeps being valid. */
+	/* The last interesting (planned) frame: Only use some leading samples. */
 	if(fr->lastoff && fr->num == fr->lastframe)
 	{
 		off_t byteoff = samples_to_bytes(fr, fr->lastoff);
@@ -96,6 +92,7 @@ static void frame_buffercheck(mpg123_handle *fr)
 		{
 			fr->buffer.fill = byteoff;
 		}
+		fr->lastoff = 0; /* Only enter here once... when you seek, lastoff should be reset. */
 	}
 }
 #endif
@@ -653,7 +650,13 @@ static int get_next_frame(mpg123_handle *mh)
 		/* Or, we are finally done and have a new frame. */
 		else break;
 	} while(1);
-
+	/* When we start actually using the CRC, this could move into the loop... */
+	/* A question of semantics ... should I fold start_frame and frame_number into firstframe/lastframe? */
+	if(mh->lastframe >= 0 && mh->num > mh->lastframe)
+	{
+		mh->to_decode = mh->to_ignore = FALSE;
+		return MPG123_DONE;
+	}
 	if(change)
 	{
 		if(decode_update(mh) < 0)  /* dito... */
@@ -1449,28 +1452,6 @@ int attribute_align_arg mpg123_index(mpg123_handle *mh, off_t **offsets, off_t *
 	*fill    = 0;
 #endif
 	return MPG123_OK;
-}
-
-int attribute_align_arg mpg123_set_index(mpg123_handle *mh, off_t *offsets, off_t step, size_t fill)
-{
-	ALIGNCHECK(mh);
-	if(mh == NULL) return MPG123_ERR;
-#ifdef FRAME_INDEX
-	if(step == 0)
-	{
-		mh->err = MPG123_BAD_INDEX_PAR;
-		return MPG123_ERR;
-	}
-	if(fi_set(&mh->index, offsets, step, fill) == -1)
-	{
-		mh->err = MPG123_OUT_OF_MEM;
-		return MPG123_ERR;
-	}
-	return MPG123_OK;
-#else
-	mh->err = MPG123_MISSING_FEATURE;
-	return MPG123_ERR;
-#endif
 }
 
 int attribute_align_arg mpg123_close(mpg123_handle *mh)

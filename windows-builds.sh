@@ -17,7 +17,7 @@ case $build_type in
   x86_64-cross)
     decoder=x86-64
     strip=x86_64-w64-mingw32-strip
-    hostopt="--host=x86_64-w64-mingw32 --build=`./build/config.guess`"
+    hostopt="--host=x86_64-w64-mingw32 --build=i686-pc-mingw32"
   ;;
   *)
     echo "Unknown build type!"

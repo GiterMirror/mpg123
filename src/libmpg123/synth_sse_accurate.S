@@ -38,7 +38,7 @@ ASM_NAME(maxmin_s16):
 	.long   -956301312
 	.long   -956301312
 	.text
-	ALIGN16
+	ALIGN16,,15
 .globl ASM_NAME(synth_1to1_sse_accurate_asm)
 ASM_NAME(synth_1to1_sse_accurate_asm):
 	pushl		%ebp
