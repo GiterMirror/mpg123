@@ -1,7 +1,8 @@
 #include "config.h"
-#include "mpg123app.h"
+#include "win32_support.h"
 #include "debug.h"
 
+#ifdef HAVE_WINDOWS_H
 #ifdef WANT_WIN32_UNICODE
 int win32_cmdline_utf8(int * argc, char *** argv)
 {
@@ -43,7 +44,7 @@ void win32_set_priority (const int arg)
 	DWORD proc_result = 0;
 	HANDLE current_proc = NULL;
 	if (arg) {
-	  if ((current_proc = GetCurrentProcess()))
+	  if (current_proc = GetCurrentProcess())
 	  {
 	    switch (arg) {
 	      case -2: proc_result = SetPriorityClass(current_proc, IDLE_PRIORITY_CLASS); break;  
@@ -63,3 +64,5 @@ void win32_set_priority (const int arg)
 	  }
 	}
 }
+
+#endif /*HAVE_WINDOWS_H*/

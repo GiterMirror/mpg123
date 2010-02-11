@@ -331,9 +331,7 @@ int do_layer2(mpg123_handle *fr)
 	int clip=0;
 	int i,j;
 	int stereo = fr->stereo;
-	/* pick_table clears unused subbands */
-	/* replacement for real fraction[2][4][SBLIMIT], needs alignment. */
-	real (*fraction)[4][SBLIMIT] = fr->layer2.fraction;
+	ALIGNED(16) real fraction[2][4][SBLIMIT]; /* pick_table clears unused subbands */
 	unsigned int bit_alloc[64];
 	int scale[192];
 	int single = fr->single;

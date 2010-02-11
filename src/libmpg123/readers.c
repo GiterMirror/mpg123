@@ -58,7 +58,7 @@ static ssize_t plain_read(mpg123_handle *fr, void *buf, size_t count)
 	if(VERBOSE3) debug2("read %li bytes of %li", (long)ret, (long)count);
 	return ret;
 }
-#if defined (NETWORK) && !defined (WANT_WIN32_SOCKETS)
+#if (!defined (WIN32) || defined (__CYGWIN__))
 
 /* Wait for data becoming available, allowing soft-broken network connection to die
    This is needed for Shoutcast servers that have forgotten about us while connection was temporarily down. */
@@ -369,7 +369,9 @@ static int generic_read_frame_body(mpg123_handle *fr,unsigned char *buf, int siz
 	{
 		long ll = l;
 		if(ll <= 0) ll = 0;
-		return READER_MORE;
+
+		/* This allows partial frames at the end... do we really want to pad and decode these?! */
+		memset(buf+ll,0,size-ll);
 	}
 	return l;
 }
@@ -539,7 +541,7 @@ static ssize_t bc_give(struct bufferchain *bc, unsigned char *out, ssize_t size)
 		if(chunk > b->size - loff) chunk = b->size - loff;
 
 #ifdef EXTRA_DEBUG
-		debug3("copying %liB from %p+%li",(long)chunk, b->data, (long)loff);
+		debug3("copying %liB from %p+%li",(long)chunk, b->data, (long)loff); */
 #endif
 
 		memcpy(out+gotcount, b->data+loff, chunk);

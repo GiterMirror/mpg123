@@ -1933,10 +1933,8 @@ int do_layer3(mpg123_handle *fr)
 
 	for(gr=0;gr<granules;gr++)
 	{
-		/*  hybridIn[2][SBLIMIT][SSLIMIT] */
-		real (*hybridIn)[SBLIMIT][SSLIMIT] = fr->layer3.hybrid_in;
-		/*  hybridOut[2][SSLIMIT][SBLIMIT] */
-		real (*hybridOut)[SSLIMIT][SBLIMIT] = fr->layer3.hybrid_out;
+		ALIGNED(16) real hybridIn[2][SBLIMIT][SSLIMIT];
+		ALIGNED(16) real hybridOut[2][SSLIMIT][SBLIMIT];
 
 		{
 			struct gr_info_s *gr_info = &(sideinfo.ch[0].gr[gr]);
