@@ -1,7 +1,7 @@
 /*
 	libmpg123: MPEG Audio Decoder library
 
-	copyright 1995-2009 by the mpg123 project - free software under the terms of the LGPL 2.1
+	copyright 1995-2010 by the mpg123 project - free software under the terms of the LGPL 2.1
 	see COPYING and AUTHORS files in distribution or http://mpg123.org
 
 */
@@ -66,6 +66,23 @@ static void frame_buffercheck(mpg123_handle *fr)
 	/* When we have no accurate position, gapless code does not make sense. */
 	if(!fr->accurate) return;
 
+	/* Important: We first cut samples from the end, then cut from beginning (including left-shift of the buffer).
+	   This order works also for the case where firstframe == lastframe. */
+
+	/* The last interesting (planned) frame: Only use some leading samples.
+	   Note a difference from the below: The last frame and offset are unchanges by seeks.
+	   The lastoff keeps being valid. */
+	if(fr->lastframe > -1 && fr->num >= fr->lastframe)
+	{
+		/* There can be more than one frame of padding at the end, so we ignore the whole frame if we are beyond lastframe. */
+		off_t byteoff = (fr->num == fr->lastframe) ? samples_to_bytes(fr, fr->lastoff) : 0;
+		if((off_t)fr->buffer.fill > byteoff)
+		{
+			fr->buffer.fill = byteoff;
+		}
+		debug1("Cut frame buffer on end of stream, fill now %"SIZE_P" bytes.", (size_p)fr->buffer.fill);
+	}
+
 	/* The first interesting frame: Skip some leading samples. */
 	if(fr->firstoff && fr->num == fr->firstframe)
 	{
@@ -85,18 +102,6 @@ static void frame_buffercheck(mpg123_handle *fr)
 		/* We can only reach this frame again by seeking. And on seeking, firstoff will be recomputed.
 		   So it is safe to null it here (and it makes the if() decision abort earlier). */
 		fr->firstoff = 0;
-	}
-	/* The last interesting (planned) frame: Only use some leading samples.
-	   Note a difference from the above: The last frame and offset are unchanges by seeks.
-	   The lastoff keeps being valid. */
-	if(fr->lastframe > -1 && fr->num >= fr->lastframe)
-	{
-		/* There can be more than one frame of padding at the end, so we ignore the whole frame if we are beyond lastframe. */
-		off_t byteoff = (fr->num == fr->lastframe) ? samples_to_bytes(fr, fr->lastoff) : 0;
-		if((off_t)fr->buffer.fill > byteoff)
-		{
-			fr->buffer.fill = byteoff;
-		}
 	}
 }
 #endif

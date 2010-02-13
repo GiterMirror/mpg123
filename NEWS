@@ -2,6 +2,9 @@
 ---
 
 - Introduce a hack to make multilib builds possible without using the correct header: -D_FILE_OFFSET_BITS=64 -DMPG123_FORCE_LARGEFILE=_64 will enable build of a 32bit libmpg123 client app with largefile support using the installed mpg123 header from a 64-bit build, but linking with a 32-bit libmpg123.
+- Fixes for gapless decoding:
+  - Correctly skip padding larger than one MPEG frame (strange, but occurs).
+  - Bug 2950218 (proper gapless cuts for seeking near the end).
 
 1.10.0
 ---
