@@ -6,6 +6,9 @@
 - Fixes for gapless decoding:
   - Correctly skip padding larger than one MPEG frame (strange, but occurs).
   - Bug 2950218 (proper gapless cuts for seeking near the end).
+- Make sure the search for the first header aborts after 64K of one-byte reads, as always intended.
+  Certain files (or even random data) were able to fool mpg123 sufficiently enough that it basically reads through the whole file in 1-byte steps in search for MPEG data.
+  The limit of 64K will very likely be configurable in a future mpg123 version.
 
 1.10.0
 ---
