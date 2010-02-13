@@ -28,38 +28,31 @@
 @INCLUDE_STDLIB_H@
 @INCLUDE_SYS_TYPE_H@
 
-/* Renaming on largefile-sensitive functions to avoid subtle breakage. */
-#if (defined MPG123_FORCE_LARGEFILE) || @LARGEFILE_SWITCH@
+/* Simplified large file handling.
+	I used to have a check here that prevents building for a library with conflicting large file setup
+	(application that uses 32 bit offsets with library that uses 64 bits).
+	While that was perfectly fine in an environment where there is one incarnation of the library,
+	it hurt GNU/Linux and Solaris systems with multilib where the distribution fails to provide the
+	correct header matching the 32 bit library (where large files need explicit support) or
+	the 64 bit library (where there is no distinction).
 
-/* Check for compiling programs against this libmpg123. */
-/* ...unless this symbol overrides the checks*/
-#ifdef MPG123_FORCE_LARGEFILE
+	New approach: When the app defines _FILE_OFFSET_BITS, it wants non-default large file support,
+	and thus functions with added suffix (mpg123_open_64).
+	Any mismatch will be caught at link time because of the _FILE_OFFSET_BITS setting used when
+	building libmpg123.
 
-/* The value is used as largefile function suffix (even if empty!) */
-#define MPG123_LARGEFILE_SUFFIX MPG123_FORCE_LARGEFILE
-
-#else
-
-/* The deault behaviour is deterined by the configuration of the mpg123 build. */
-#if (defined _FILE_OFFSET_BITS) && (_FILE_OFFSET_BITS+0 == @LARGEFILE_BITS@)
-/* ...all is fine, having enabled large file support and also the correct sort of which. */
-#define MPG123_LARGEFILE_SUFFIX @LARGEFILE_SUFFIX@
-#else
-#error "Mismatch in large file setup! Enable/disable large file support appropriately to use libmpg123."
-#endif
-
-#endif
-/* Redefine names of functions dealing with file and file offsets
-   ...everything handling off_t, for example, which can be 32 or 64 bits. */
-
-/* I use cpp concatenation here, hoping that it never introduces a space when it matters... I have seen that, though. */
+	Thinking about offering wrappers for non-largefile-aware apps (mpg123_open wrapping over mpg123_open_64, using 32 bit off_t):
+	This would need more pervasive changes in libmpg123, including	figuring out how to properly handle file descriptors being handed to mpg123_open_fd.
+	And frankly, I would like to avoid that complication. You can have multiple builds of libmpg123, after all -- with and without large file support.
+*/
+#if (defined _FILE_OFFSET_BITS)
 
 /* Need some trickery to concatenate the value of the given macro.
    To make it clear:
-   When MPG123_LARGEFILE_SUFFIX is _64, the function names get _64 appended. */
-#define MPG123_ADDSUFFIX_REALLY(func, suffix) func ## suffix
-#define MPG123_ADDSUFFIX(func, suffix) MPG123_ADDSUFFIX_REALLY(func,suffix)
-#define MPG123_LARGENAME(func) MPG123_ADDSUFFIX(func, MPG123_LARGEFILE_SUFFIX)
+   When _FILE_OFFSET_BITS is _64, the function names get _64 appended. */
+#define MPG123_ADDSUFFIX_REALLY(func, suffix) func ## _ ## suffix
+#define MPG123_ADDSUFFIX(func, suffix) MPG123_ADDSUFFIX_REALLY(func, suffix)
+#define MPG123_LARGENAME(func) MPG123_ADDSUFFIX(func, _FILE_OFFSET_BITS)
 
 #define mpg123_open         MPG123_LARGENAME(mpg123_open)
 #define mpg123_open_fd      MPG123_LARGENAME(mpg123_open_fd)
