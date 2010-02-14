@@ -11,7 +11,7 @@ AC_PREREQ(2.57)
 dnl ############# Initialisation
 
 AC_INIT([mpg123], [1.10.1], [mpg123-devel@lists.sourceforge.net])
-LIBMPG123_VERSION=22:2:22
+LIBMPG123_VERSION=22:3:22
 AC_SUBST(LIBMPG123_VERSION)
 
 AC_CONFIG_SRCDIR(src/mpg123.c)
