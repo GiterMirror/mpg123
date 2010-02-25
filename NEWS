@@ -12,6 +12,7 @@
 - Fix subtle bug with seeking in feeder mode: A seek close to the current position (meaning: the needed data offset is already in mpg123's buffer chain) resulted in skipped bytes.
 - Improve the feeder mode for handling large amounts of junk at the beginning, including proper passing of the request for more data when trying to determine free format frame size. This also fixes endless looping as reported in bug 2951334.
 - The parser code still needs overhaul. It is not pretty.
+- Compile fix for OpenAL.
 
 1.10.0
 ---
