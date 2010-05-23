@@ -171,10 +171,8 @@ int main(int argc, char **argv)
 		fprintf(stderr,"Unable to open output file %s\n", argv[2]);
 		return -1;
 	}
-
-	fprintf(stderr, "Seeking...\n");
-	/* That condition is tricky... parentheses are crucial... */
-	while((ret = mpg123_feedseek(m, 95000, SEEK_SET, &inoffset)) == MPG123_NEED_MORE)
+	
+	while(ret = mpg123_feedseek(m, 95000, SEEK_SET, &inoffset) == MPG123_NEED_MORE)
 	{
 		len = fread(buf, sizeof(unsigned char), INBUFF, in);
 		if(len <= 0)
@@ -188,15 +186,9 @@ int main(int argc, char **argv)
 			return -1; 
 		}
 	}
-	if(ret == MPG123_ERR)
-	{
-		fprintf(stderr, "Feedseek failed: %s\n", mpg123_strerror(m));
-		return -1;
-	}
-
+	
 	fseek(in, inoffset, SEEK_SET);	
 	
-	fprintf(stderr, "Starting decode...\n");
 	while(1)
 	{
 		len = fread(buf, sizeof(unsigned char), INBUFF, in);

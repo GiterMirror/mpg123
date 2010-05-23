@@ -91,16 +91,6 @@ char cpu_flags;
 #	define OUT_SYNTHS(synth_16, synth_8, synth_real, synth_32) { IF8(synth_8) IFREAL(synth_real) IF32(synth_32) }
 #endif
 
-/* The call of left and right plain synth, wrapped.
-   This may be replaced by a direct stereo optimized synth. */
-int synth_stereo_wrap(real *bandPtr_l, real *bandPtr_r, mpg123_handle *fr)
-{
-	int clip;
-	clip  = (fr->synth)(bandPtr_l, 0, fr, 0);
-	clip += (fr->synth)(bandPtr_r, 1, fr, 1);
-	return clip;
-}
-
 const struct synth_s synth_base =
 {
 	{ /* plain */
@@ -903,8 +893,8 @@ const char* attribute_align_arg mpg123_current_decoder(mpg123_handle *mh)
 	return decname[mh->cpu_opts.type];
 }
 
-const char attribute_align_arg **mpg123_decoders(void){ return mpg123_decoder_list; }
-const char attribute_align_arg **mpg123_supported_decoders(void)
+const char attribute_align_arg **mpg123_decoders(){ return mpg123_decoder_list; }
+const char attribute_align_arg **mpg123_supported_decoders()
 {
 #ifdef OPT_MULTI
 	return mpg123_supported_decoder_list;

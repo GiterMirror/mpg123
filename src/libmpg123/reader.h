@@ -16,7 +16,6 @@ struct buffy
 {
 	unsigned char *data;
 	ssize_t size;
-	ssize_t realsize;
 	struct buffy *next;
 };
 

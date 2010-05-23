@@ -290,11 +290,8 @@ int attribute_align_arg mpg123_par(mpg123_pars *mp, enum mpg123_parms key, long 
 			mp->outscale = val == 0 ? fval : (double)val/SHORT_SCALE;
 		break;
 		case MPG123_TIMEOUT:
-#ifdef TIMEOUT_READ
 			mp->timeout = val >= 0 ? val : 0;
-#else
-			if(val > 0) ret = MPG123_NO_TIMEOUT;
-#endif
+			/*ret = MPG123_NO_TIMEOUT;*/
 		break;
 		case MPG123_RESYNC_LIMIT:
 			mp->resync_limit = val;
@@ -590,7 +587,7 @@ int decode_update(mpg123_handle *mh)
 	return 0;
 }
 
-size_t attribute_align_arg mpg123_safe_buffer(void)
+size_t attribute_align_arg mpg123_safe_buffer()
 {
 	/* real is the largest possible output (it's 32bit float, 32bit int or 64bit double). */
 	return sizeof(real)*2*1152*NTOM_MAX;
