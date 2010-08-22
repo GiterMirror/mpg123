@@ -1,4 +1,4 @@
-targets = feedseek mpg123_to_wav mpg123_to_wav_replaced_io scan id3dump mpglib dump_seekindex
+targets = feedseek mpg123_to_wav scan id3dump mpglib dump_seekindex
 
 all: $(targets)
 
@@ -12,29 +12,25 @@ SND_CFLAGS     := $(shell pkg-config --cflags sndfile)
 SND_LDFLAGS    := $(shell pkg-config --libs   sndfile)
 
 # Oder of libs not that important here...
-compile = $(CC) $(CPPFLAGS) $(CFLAGS) $(MPG123_CFLAGS)
-linkflags = $(MPG123_LDFLAGS) $(LDFLAGS)
+compile = $(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) $(MPG123_CFLAGS) $(MPG123_LDFLAGS)
 
 mpg123_to_wav: mpg123_to_wav.c
-	$(compile) -o mpg123_to_wav mpg123_to_wav.c $(SND_CFLAGS) $(SND_LDFLAGS) $(linkflags)
-
-mpg123_to_wav_replaced_io: mpg123_to_wav_replaced_io.c
-	$(compile) -o $@ $< $(SND_CFLAGS) $(SND_LDFLAGS) $(linkflags)
+	$(compile) $(SND_CFLAGS) $(SND_LDFLAGS) -o mpg123_to_wav mpg123_to_wav.c
 
 feedseek: feedseek.c
-	$(compile) -o feedseek feedseek.c $(linkflags)
+	$(compile) -o feedseek feedseek.c
 
 scan: scan.c
-	$(compile) -o scan scan.c $(linkflags)
+	$(compile) -o scan scan.c
 
 id3dump:id3dump.c
-	$(compile) -o id3dump id3dump.c $(linkflags)
+	$(compile) -o id3dump id3dump.c
 
 dump_seekindex: dump_seekindex.c
-	$(compile) -o dump_seekindex dump_seekindex.c $(linkflags)
+	$(compile) -o dump_seekindex dump_seekindex.c
 
 mpglib: mpglib.c
-	$(compile) -o mpglib mpglib.c $(linkflags)
+	$(compile) -o mpglib mpglib.c
 
 clean:
 	rm -vf $(targets)

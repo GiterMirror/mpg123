@@ -9,10 +9,10 @@ AC_PREREQ(2.57)
 
 
 dnl ############# Initialisation
-AC_INIT([mpg123], [1.13.0], [mpg123-devel@lists.sourceforge.net])
+AC_INIT([mpg123], [1.12.3], [mpg123-devel@lists.sourceforge.net])
 dnl Increment API_VERSION when the API gets changes (new functions).
-API_VERSION=28
-LIB_PATCHLEVEL=0
+API_VERSION=25
+LIB_PATCHLEVEL=5
 dnl Since we want to be backwards compatible, both sides get set to API_VERSION.
 LIBMPG123_VERSION=$API_VERSION:$LIB_PATCHLEVEL:$API_VERSION
 AC_SUBST(LIBMPG123_VERSION)
@@ -1844,7 +1844,7 @@ AC_DEFINE_UNQUOTED(INDEX_SIZE, $seektable, [size of the frame index seek table])
 dnl ############## Win32 function checks
 # Check if we want Unicode for Win32. Cygwin does not need _wopen
 win32_specific_codes=disabled
-win32_unicode=unneeded
+win32_unicode=Uneeded
 win32_sockets=disabled
 win32_sockets_working=no
 win32_wide_working=no
@@ -2011,7 +2011,7 @@ echo "
   $PACKAGE_NAME $PACKAGE_VERSION
 
   Install path ............ $prefix
-  CPU Optimization ........ $cpu_type
+  CPU Optimisation......... $cpu_type
   Compiler Optimization ... $with_optimization
   Gapless Support ......... $gapless
   Debugging ............... $debugging

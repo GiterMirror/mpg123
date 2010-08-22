@@ -29,7 +29,6 @@ libmpg123_la_LIBADD = @DECODER_LOBJ@ @LFS_LOBJ@
 libmpg123_la_DEPENDENCIES = @DECODER_LOBJ@ @LFS_LOBJ@
 
 libmpg123_la_SOURCES = \
-	intsym.h \
 	compat.c \
 	compat.h \
 	parse.c \

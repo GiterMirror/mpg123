@@ -30,7 +30,6 @@ static int default_init(mpg123_handle *fr);
 static off_t get_fileinfo(mpg123_handle *);
 static ssize_t posix_read(int fd, void *buf, size_t count){ return read(fd, buf, count); }
 static off_t   posix_lseek(int fd, off_t offset, int whence){ return lseek(fd, offset, whence); }
-static off_t     nix_lseek(int fd, off_t offset, int whence){ return -1; }
 
 static ssize_t plain_fullread(mpg123_handle *fr,unsigned char *buf, ssize_t count);
 
@@ -782,17 +781,17 @@ off_t feed_set_pos(mpg123_handle *fr, off_t pos)
  */
 
 #define bugger_off { mh->err = MPG123_NO_READER; return MPG123_ERR; }
-static int bad_init(mpg123_handle *mh) bugger_off
-static void bad_close(mpg123_handle *mh){}
-static ssize_t bad_fullread(mpg123_handle *mh, unsigned char *data, ssize_t count) bugger_off
-static int bad_head_read(mpg123_handle *mh, unsigned long *newhead) bugger_off
-static int bad_head_shift(mpg123_handle *mh, unsigned long *head) bugger_off
-static off_t bad_skip_bytes(mpg123_handle *mh, off_t len) bugger_off
-static int bad_read_frame_body(mpg123_handle *mh, unsigned char *data, int size) bugger_off
-static int bad_back_bytes(mpg123_handle *mh, off_t bytes) bugger_off
-static int bad_seek_frame(mpg123_handle *mh, off_t num) bugger_off
-static off_t bad_tell(mpg123_handle *mh) bugger_off
-static void bad_rewind(mpg123_handle *mh){}
+int bad_init(mpg123_handle *mh) bugger_off
+void bad_close(mpg123_handle *mh){}
+ssize_t bad_fullread(mpg123_handle *mh, unsigned char *data, ssize_t count) bugger_off
+int bad_head_read(mpg123_handle *mh, unsigned long *newhead) bugger_off
+int bad_head_shift(mpg123_handle *mh, unsigned long *head) bugger_off
+off_t bad_skip_bytes(mpg123_handle *mh, off_t len) bugger_off
+int bad_read_frame_body(mpg123_handle *mh, unsigned char *data, int size) bugger_off
+int bad_back_bytes(mpg123_handle *mh, off_t bytes) bugger_off
+int bad_seek_frame(mpg123_handle *mh, off_t num) bugger_off
+off_t bad_tell(mpg123_handle *mh) bugger_off
+void bad_rewind(mpg123_handle *mh){}
 #undef bugger_off
 
 #define READER_STREAM 0
@@ -800,7 +799,7 @@ static void bad_rewind(mpg123_handle *mh){}
 #define READER_FEED       2
 #define READER_BUF_STREAM 3
 #define READER_BUF_ICY_STREAM 4
-static struct reader readers[] =
+struct reader readers[] =
 {
 	{ /* READER_STREAM */
 		default_init,
@@ -899,7 +898,7 @@ static struct reader readers[] =
 #endif
 };
 
-static struct reader bad_reader =
+struct reader bad_reader =
 {
 	bad_init,
 	bad_close,
@@ -939,16 +938,8 @@ static int default_init(mpg123_handle *fr)
 
 	fr->rdat.read  = fr->rdat.r_read  != NULL ? fr->rdat.r_read  : posix_read;
 	fr->rdat.lseek = fr->rdat.r_lseek != NULL ? fr->rdat.r_lseek : posix_lseek;
-	/* ICY streams of any sort shall not be seekable. */
-	if(fr->p.icy_interval > 0) fr->rdat.lseek = nix_lseek;
-
 	fr->rdat.filelen = get_fileinfo(fr);
 	fr->rdat.filepos = 0;
-	/*
-		Don't enable seeking on ICY streams, just plain normal files.
-		This check is necessary since the client can enforce ICY parsing on files that would otherwise be seekable.
-		It is a task for the future to make the ICY parsing safe with seeks ... or not.
-	*/
 	if(fr->rdat.filelen >= 0)
 	{
 		fr->rdat.flags |= READER_SEEKABLE;
