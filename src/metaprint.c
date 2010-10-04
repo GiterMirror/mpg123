@@ -12,6 +12,39 @@
 
 const char joker_symbol = '*';
 
+/* This is part of future libmpg123 API. */
+static size_t mpg123_strlen(mpg123_string *sb, int utf8)
+{
+	size_t i;
+	size_t bytelen;
+
+	/* Notions of empty string. If there's only a single character, it has to be the trailing zero, and if the first is the trailing zero anyway, we got empty. */
+	if(sb->fill < 2 || sb->p[0] == 0) return 0;
+
+	/* Find the first non-null character from the back.
+	   We already established that the first character is non-null
+	   That at fill-2 has to be null, though. */
+	for(i=sb->fill-2; i>0; --i)
+	if(sb->p[i] != 0) break;
+
+	/* For simple byte strings, we are done now. */
+	bytelen = i+1;
+
+	if(!utf8) return bytelen;
+	else
+	{
+		/* Work out the actual count of UTF8 bytes.
+		   This employs no particular encoding error checking. */
+		size_t len = 0;
+		for(i=0; i<bytelen; ++i)
+		{
+			/* Every byte that is not a continuation byte ( 0xc0 == 10xx xxxx ) stands for a character. */
+			if((sb->p[i] & 0xc0) != 0x80) len++;
+		}
+		return len;
+	}
+}
+
 static void utf8_ascii(mpg123_string *dest, mpg123_string *source);
 /* Copy UTF-8 string or melt it down to ASCII, also returning the character length. */
 static size_t transform(mpg123_string *dest, mpg123_string *source)
@@ -297,18 +330,11 @@ static void utf8_ascii(mpg123_string *dest, mpg123_string *source)
 	size_t dlen = 0;
 	char *p;
 
-	/* Find length of ASCII string (count non-continuation bytes).
-	   Do _not_ change this to mpg123_strlen()!
-	   It needs to match the loop below. Especially dlen should not stop at embedded null bytes. You can get any trash from ID3! */
-	for(spos=0; spos < source->fill; ++spos)
-	if((source->p[spos] & 0xc0) == 0x80) continue;
-	else ++dlen;
+	dlen = mpg123_strlen(source, 1);
 
-	/* The trailing zero is included in dlen; if there is none, one character will be cut. Bad input -> bad output. */
-	if(!mpg123_resize_string(dest, dlen)){ mpg123_free_string(dest); return; }
+	if(!mpg123_resize_string(dest, dlen+1)){ mpg123_free_string(dest); return; }
 	/* Just ASCII, we take it easy. */
 	p = dest->p;
-
 	for(spos=0; spos < source->fill; ++spos)
 	{
 		/* UTF-8 continuation byte 0x10?????? */
@@ -320,8 +346,6 @@ static void utf8_ascii(mpg123_string *dest, mpg123_string *source)
 
 		++p; /* next output char */
 	}
-	/* Always close the string, trailing zero might be missing. */
 	if(dest->size) dest->p[dest->size-1] = 0;
-
-	dest->fill = dest->size;
+	dest->fill = dest->size; /* The one extra 0 is unaccounted. */
 }

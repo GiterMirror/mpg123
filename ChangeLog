@@ -1,3 +1,9 @@
-This is a dummy file. If you want to see the change log, use subversion:
+Dammit, this is a dummy file! Checking in the real changelog into the version system is too weird since it just consists of the log of the version system.
 
-	svn log -v svn://orgis.org/mpg123
+Thomas: Please do
+
+svn revert ChangeLog
+
+after a release!
+
+(or modify the make dist target to do that...)
