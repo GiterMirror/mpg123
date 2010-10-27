@@ -1,36 +1,50 @@
-Things that need to be done...
-
-0. Fix that ugly crash that happens sometimes when Ctrl+C-ing with jack output active:
-
-Program terminated with signal 11, Segmentation fault.
-[New process 6293]
-[New process 6291]
-[New process 6292]
-[New process 6284]
-#0  0x00002aced607695b in memcpy () from /lib/libc.so.6
-(gdb) bt
-#0  0x00002aced607695b in memcpy () from /lib/libc.so.6
-#1  0x00002aced5b4f092 in jack_ringbuffer_read () from /usr/lib/libjack.so.0
-#2  0x00000000004151dd in process_callback ()
-#3  0x00002aced5b4bf40 in Jack::JackClient::Execute () from /usr/lib/libjack.so.0
-#4  0x00002aced5b5f8da in Jack::JackPosixThread::ThreadHandler () from /usr/lib/libjack.so.0
-#5  0x00002aced6354fa7 in start_thread () from /lib/libpthread.so.0
-#6  0x00002aced60c802d in clone () from /lib/libc.so.6
 
 
-1. mpg123 could pick up new sample rates suggested by the output modules (like a jack server fixed to 96kHz) and adapt to that.
+- add CRC check.
+- add 'free format stream' support.
+- optimize layer2.c:
+   step_two: fraction as pointer .. 
+   process first channel 0 than channel 1
+   copy channel 0 to channel 1 for: i >= jsbound
+- better frame reader .. especially for layer 3 
+- MPEG system stream decoder
+- check again layer1 !! (Layer-1 support not heavily tested ..)
+  Problems with Layer1 fl7 reference stream
+- Write a special (optimized) 'single channel' decode.
+- optimized dct64 for down sampling modes
+- native audio support for AIX and DEC
+- update manpage
+- optimizations for downsampling modes on layer2 and layer1
 
-Though the practical rates for MPEG audio are up to 48kHz ... but one could easily upsample.
-Currently, we detect standard rates and resample when needed... but not new ones.
+MORE TODO: (partially done)
+---------------------------
 
-4. Prevent ID3v2 tags from being parsed multiple times after seek.
+A few notes on how mpg123 tries to select a 'good' 
+audio encoding and frequency. (not full implemented yet!!)
 
-I need to carry a list of ID3v2 frame addresses that already have been parsed into the data structures.
-Currently, this is a possible memory leak when the seek index is disabled (tag data at file beginning) or id3 data is just somewhere in the stream.
-That being said, in the "normal" case, there is no leak.
+- mpg123 tries to set the settings you specify on the command line
+  in the order of its appearence (exclusiv .. no fallback then)
+  (-r <rate>, --mono, --stereo, --8bit, etc )
 
-5. What's about SINGLE_MIX?
-Check what is _really_ happening there, make some test file...
+- after this, mpg123 tries to set 
+    1. the number of channels (or fallback to mono if stereo isn't possible)
+    2. the audioformat to 16 bit (or fallback to 8bit)
+    3. the "best" frequency: (in this order)
+        - the exact stream frequency or fallback to
+        - 2:1 frequency or fallback to
+        - 4:1 frequency or try the
+        - nearest frequency lower than the frequency of your stream
+       mpg123 automagically converts the rate. 
 
-6. Ensure proper operation of free format with the feeder.
-MPG123_NEED_MORE needs to be propagated from the freeformat framesize guesser.
+So, if you think (or even know), that your hardware supports a higher
+frequency only with eg. mono,8bit you must force mpg123 to play mono 
+and 8bit. ("--8bit -m") etc....
+
+If you wanna a constant format eg to output the data to stdout you 
+must explicit force it with eg: '-r 44100 --stereo'
+Else the format will be the format of the mpeg stream.
+
+       
+
+
+
