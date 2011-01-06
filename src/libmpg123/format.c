@@ -25,22 +25,13 @@ static const int my_encodings[MPG123_ENCODINGS] =
 	MPG123_ENC_UNSIGNED_32,
 	MPG123_ENC_SIGNED_24,
 	MPG123_ENC_UNSIGNED_24,
-	/* Floating point range, see below. */
 	MPG123_ENC_FLOAT_32,
 	MPG123_ENC_FLOAT_64,
-	/* 8 bit range, see below. */
 	MPG123_ENC_SIGNED_8,
 	MPG123_ENC_UNSIGNED_8,
 	MPG123_ENC_ULAW_8,
 	MPG123_ENC_ALAW_8
 };
-
-/* Make that match the above table.
-   And yes, I still don't like this kludgy stuff. */
-/* range[0] <= i < range[1] for forced floating point */
-static const int enc_float_range[2] = { 6, 8 };
-/* same for 8 bit encodings */
-static const int enc_8bit_range[2] = { 8, 12 };
 
 /* Only one type of float is supported. */
 # ifdef REAL_IS_FLOAT
@@ -205,13 +196,13 @@ int frame_output_format(mpg123_handle *fr)
 	/* All this forcing should be removed in favour of the capabilities table... */
 	if(p->flags & MPG123_FORCE_8BIT)
 	{
-		f0 = enc_8bit_range[0];
-		f2 = enc_8bit_range[1];
+		f0 = 6;
+		f2 = 10;
 	}
 	if(p->flags & MPG123_FORCE_FLOAT)
 	{
-		f0 = enc_float_range[0];
-		f2 = enc_float_range[1];
+		f0 = 4;
+		f2 = 6;
 	}
 
 	/* force stereo is stronger */
