@@ -168,7 +168,6 @@ int main(int argc, char **argv)
 	out = fopen(argv[2], "wb");
 	if(out == NULL)
 	{
-		fclose(in);
 		fprintf(stderr,"Unable to open output file %s\n", argv[2]);
 		return -1;
 	}

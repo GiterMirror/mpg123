@@ -9,10 +9,10 @@ AC_PREREQ(2.57)
 
 
 dnl ############# Initialisation
-AC_INIT([mpg123], [1.13.0], [mpg123-devel@lists.sourceforge.net])
+AC_INIT([mpg123], [1.13.1], [mpg123-devel@lists.sourceforge.net])
 dnl Increment API_VERSION when the API gets changes (new functions).
 API_VERSION=29
-LIB_PATCHLEVEL=3
+LIB_PATCHLEVEL=1
 dnl Since we want to be backwards compatible, both sides get set to API_VERSION.
 LIBMPG123_VERSION=$API_VERSION:$LIB_PATCHLEVEL:$API_VERSION
 AC_SUBST(LIBMPG123_VERSION)
@@ -950,6 +950,20 @@ AC_CHECK_FUNCS( atoll )
 
 AC_CHECK_FUNCS( mkfifo, [ have_mkfifo=yes ], [ have_mkfifo=no ] )
 
+if test x"$fifo" = xauto; then
+	if test x"$have_mkfifo" = xyes; then
+		fifo=enabled
+	else
+		fifo=disabled
+	fi
+fi
+if test x"$fifo" = xenabled; then
+	AC_DEFINE(FIFO, 1, [ Define if FIFO support is enabled. ])
+	if test x"$have_mkfifo" = xno; then
+		AC_MSG_WARN( [ You forced FIFO code while I think there is no mkfifo() available! ] )
+	fi
+fi
+
 dnl ############## Header and Library Checks
 
 # locale headers
@@ -1858,7 +1872,7 @@ if test "x$win32_specific_codes" = xenabled && test "x$host_os" != "xcygwin"; th
   if test "x$win32_unicode" = xenabled; then
     AC_MSG_RESULT([yes])
     AC_MSG_CHECKING([if Unicode functions working])
-    AC_LINK_IFELSE([AC_LANG_SOURCE([
+    AC_LINK_IFELSE([[
       #include <windows.h>
       #include <stdlib.h>
       int main()
@@ -1867,9 +1881,9 @@ if test "x$win32_specific_codes" = xenabled && test "x$host_os" != "xcygwin"; th
         WideCharToMultiByte (0, 0, NULL, 0, NULL, 0, NULL, NULL);
         return 0;
       }
-    ])], [win32_wide_working=yes], [win32_winver_bump=yes])
+    ]], [win32_wide_working=yes], [win32_winver_bump=yes])
     if test "x$win32_wide_working" = xno; then
-      AC_LINK_IFELSE([AC_LANG_SOURCE([
+      AC_LINK_IFELSE([[
         #define WINVER 0x501
         #define _WIN32_WINNT 0x501
         #include <windows.h>
@@ -1880,7 +1894,7 @@ if test "x$win32_specific_codes" = xenabled && test "x$host_os" != "xcygwin"; th
           WideCharToMultiByte (0, 0, NULL, 0, NULL, 0, NULL, NULL);
           return 0;
         }
-      ])], [win32_wide_working=yes], [AC_MSG_RESULT([no])])
+      ]], [win32_wide_working=yes], [AC_MSG_RESULT([no])])
     fi
     if test "x$win32_wide_working" = xyes; then
       AC_MSG_RESULT([yes])
@@ -1898,7 +1912,7 @@ if test "x$win32_specific_codes" = xenabled && test "x$host_os" != "xcygwin"; th
   AC_MSG_CHECKING([if winsock2 API is available])
     wsoldlibs="$LIBS"
     LIBS="$LIBS -lws2_32"
-    AC_LINK_IFELSE([AC_LANG_SOURCE([
+    AC_LINK_IFELSE([[
       #include <winsock2.h>
       #include <ws2tcpip.h>
       #include <stdlib.h>
@@ -1908,10 +1922,10 @@ if test "x$win32_specific_codes" = xenabled && test "x$host_os" != "xcygwin"; th
         freeaddrinfo(NULL);
         return 0;
       }
-    ])], [win32_sockets_working=yes], [win32_winver_bump=yes])
+    ]], [win32_sockets_working=yes], [win32_winver_bump=yes])
     if test "x$win32_sockets_working" = "xno"; then
       AC_MSG_CHECKING([deeper if winsock2 API is available])
-      AC_LINK_IFELSE([AC_LANG_SOURCE([
+      AC_LINK_IFELSE([
         #define WINVER 0x501
         #define _WIN32_WINNT 0x501
         #include <winsock2.h>
@@ -1923,7 +1937,7 @@ if test "x$win32_specific_codes" = xenabled && test "x$host_os" != "xcygwin"; th
           freeaddrinfo(NULL);
           return 0;
         }
-      ])], [win32_sockets_working=yes], [AC_MSG_RESULT([no])])
+      ], [win32_sockets_working=yes], [AC_MSG_RESULT([no])])
     fi
     if test "x$win32_sockets_working" = "xyes"; then
       AC_MSG_RESULT([yes])
@@ -1938,47 +1952,10 @@ if test "x$win32_specific_codes" = xenabled && test "x$host_os" != "xcygwin"; th
   else
     AC_MSG_RESULT([no])
   fi
-
-#### Check for Win32 Named Pipe functions
-win32_fifo_working=no
-if test x$win32_specific_codes = xenabled; then
-  AC_MSG_CHECKING([if we have Named Pipes])
-  if test "x$fifo" != "xdisabled"; then
-    AC_LINK_IFELSE([AC_LANG_SOURCE([
-    #include <windows.h>
-      int main(){
-        CreateNamedPipeA(NULL,PIPE_ACCESS_DUPLEX|FILE_FLAG_OVERLAPPED,PIPE_TYPE_BYTE,1,255,255,0,NULL);
-        CreateNamedPipeW(NULL,PIPE_ACCESS_DUPLEX|FILE_FLAG_OVERLAPPED,PIPE_TYPE_BYTE,1,255,255,0,NULL);
-        return 0;
-      }])],[win32_fifo_working=yes],[win32_winver_bump=yes])
-    if test "x$win32_fifo_working" != "xyes"; then
-    AC_LINK_IFELSE([AC_LANG_SOURCE([
-    #define WINVER 0x501
-    #define _WIN32_WINNT 0x501
-    #include <windows.h>
-      int main(){
-        CreateNamedPipeA(NULL,PIPE_ACCESS_DUPLEX|FILE_FLAG_OVERLAPPED,PIPE_TYPE_BYTE,1,255,255,0,NULL);
-        CreateNamedPipeW(NULL,PIPE_ACCESS_DUPLEX|FILE_FLAG_OVERLAPPED,PIPE_TYPE_BYTE,1,255,255,0,NULL);
-        return 0;
-      }])],[win32_fifo_working=yes],[win32_fifo_working=no])
-    fi
-  fi
-  have_mkfifo=$win32_fifo_working
-  if test "x$win32_fifo_working" = "xyes"; then
-    AC_MSG_RESULT([yes])
-    AC_DEFINE([WANT_WIN32_FIFO], [1], [ Define to use Win32 named pipes ])
-  else
-    AC_MSG_RESULT([no])
-  fi
-fi
-
-#### WINVER Bump
-if test x$win32_specific_codes = xenabled; then
   AC_MSG_CHECKING([if WINVER and _WIN32_WINNT needs version bumps])
   if test "x$win32_winver_bump" = "xyes"; then
     AC_MSG_RESULT([yes])
-    AC_DEFINE([WINVER], [0x0501], [ WinXP and above for ipv6 ])
-    AC_DEFINE([_WIN32_WINNT], [0x0501], [ WinXP and above for ipv6 ])
+    CFLAGS="$CFLAGS -DWINVER=0x0501 -D_WIN32_WINNT=0x0501"
     # getaddrinfo and freeaddrinfo are available for Win2K and above
     # Bug: MinGW.org w32api ws2tcpip.h incorrectly wants (_WIN32_WINNT >= 0x0501) for getaddrinfo and freeaddrinfo
     # MultiByteToWideChar and WideCharToMultiByte are available for Win2K and above
@@ -1986,8 +1963,6 @@ if test x$win32_specific_codes = xenabled; then
     AC_MSG_RESULT([no])
   fi
 fi
-
-fi #END OF WIN32 CHECKS
 
 #### Use Win32 support codes
 AM_CONDITIONAL([WIN32_CODES], [ test "x$win32_specific_codes" = xenabled ])
@@ -2004,23 +1979,6 @@ if test x"$ipv6" = xauto; then
 		ipv6=enabled
 	else
 		ipv6=disabled
-	fi
-fi
-
-dnl ############## FIFO enable
-
-if test x"$fifo" = xauto; then
-	if test x"$have_mkfifo" = xyes; then
-		fifo=enabled
-	else
-		fifo=disabled
-	fi
-fi
-
-if test x"$fifo" = xenabled; then
-	AC_DEFINE(FIFO, 1, [ Define if FIFO support is enabled. ])
-	if test x"$have_mkfifo" = xno; then
-		AC_MSG_WARN( [ You forced FIFO code while I think there is no mkfifo() available! ] )
 	fi
 fi
 
