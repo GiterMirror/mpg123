@@ -24,7 +24,7 @@ CLEANFILES = *.a
 lib_LTLIBRARIES = libmpg123.la
 nodist_include_HEADERS = mpg123.h
 
-libmpg123_la_LDFLAGS = -no-undefined -version-info @LIBMPG123_VERSION@ -export-symbols-regex '^mpg123_'
+libmpg123_la_LDFLAGS = -no-undefined -version-info @LIBMPG123_VERSION@ -export-symbols-regex '^mpg(raw|123)_'
 libmpg123_la_LIBADD = @DECODER_LOBJ@ @LFS_LOBJ@
 libmpg123_la_DEPENDENCIES = @DECODER_LOBJ@ @LFS_LOBJ@
 
@@ -59,6 +59,8 @@ libmpg123_la_SOURCES = \
 	optimize.h \
 	optimize.c \
 	readers.c \
+	raw_api.h \
+	raw_api.c \
 	tabinit.c \
 	libmpg123.c \
 	mpg123lib_intern.h \

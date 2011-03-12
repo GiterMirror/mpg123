@@ -1,4 +1,4 @@
-targets = feedseek mpg123_to_wav mpg123_to_wav_replaced_io scan id3dump mpglib  dump_seekindex extract_frames
+targets = feedseek mpg123_to_wav mpg123_to_wav_replaced_io scan id3dump mpglib  dump_seekindex extract_frames raw_decoder
 
 all: $(targets)
 
@@ -15,6 +15,7 @@ else # Yeah, that's with GNU/Linux in mind, at least GNU ld ...
 endif
 SND_CFLAGS     := $(shell pkg-config --cflags sndfile)
 SND_LDFLAGS    := $(shell pkg-config --libs   sndfile)
+
 
 # Oder of libs not that important here...
 compile = $(CC) $(CPPFLAGS) $(CFLAGS) $(MPG123_CFLAGS)
@@ -42,6 +43,9 @@ mpglib: mpglib.c
 	$(compile) -o mpglib mpglib.c $(linkflags)
 
 extract_frames: extract_frames.c
+	$(compile) -o $@ $< $(linkflags)
+
+raw_decoder: raw_decoder.c
 	$(compile) -o $@ $< $(linkflags)
 
 clean:

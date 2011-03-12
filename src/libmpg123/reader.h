@@ -70,6 +70,9 @@ struct reader_data
 	/* Buffered readers want that abstracted, set internally. */
 	ssize_t (*fullread)(mpg123_handle *, unsigned char *, ssize_t);
 	struct bufferchain buffer; /* Not dynamically allocated, these few struct bytes aren't worth the trouble. */
+	struct mpgraw_state* rs; /* backpointer to the caller's state structure */
+	ssize_t skip; /* raw api amount to skip on read */
+	int advance_this_frame;
 };
 
 /* start to use off_t to properly do LFS in future ... used to be long */
@@ -101,6 +104,10 @@ int  feed_more(mpg123_handle *fr, const unsigned char *in, long count);
 void feed_forget(mpg123_handle *fr);  /* forget the data that has been read (free some buffers) */
 off_t feed_set_pos(mpg123_handle *fr, off_t pos); /* Set position (inside available data if possible), return wanted byte offset of next feed. */
 
+/* raw performance interface */
+int open_raw(mpg123_handle *);
+int  raw_more(mpg123_handle *fr, const unsigned char *in, long count);
+
 void open_bad(mpg123_handle *);
 
 #define READER_FD_OPENED 0x1
@@ -113,15 +120,16 @@ void open_bad(mpg123_handle *);
 #define READER_STREAM 0
 #define READER_ICY_STREAM 1
 #define READER_FEED       2
+#define READER_RAW		  3
 /* These two add a little buffering to enable small seeks for peek ahead. */
-#define READER_BUF_STREAM 3
-#define READER_BUF_ICY_STREAM 4
+#define READER_BUF_STREAM 4
+#define READER_BUF_ICY_STREAM 5
 
 #ifdef READ_SYSTEM
-#define READER_SYSTEM 5
-#define READERS 6
+#define READER_SYSTEM 6
+#define READERS 7
 #else
-#define READERS 5
+#define READERS 6
 #endif
 
 #define READER_ERROR MPG123_ERR

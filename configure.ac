@@ -1085,7 +1085,7 @@ case $cpu_type in
   ;;
   generic_dither)
     ADD_CPPFLAGS="$ADD_CPPFLAGS -DOPT_GENERIC_DITHER -DREAL_IS_FLOAT"
-    more_sources="$s_fpu $s_dither"
+    more_sources="$s_fpu"
     ccalign=no
   ;;
 dnl Not disabling buffer for float mode... check that this is OK now!
@@ -1153,7 +1153,7 @@ dnl Not disabling buffer for float mode... check that this is OK now!
   ;;
   i586_dither) 
     ADD_CPPFLAGS="$ADD_CPPFLAGS -DOPT_I586_DITHER -DREAL_IS_FLOAT"
-    more_sources="$s_fpu $s_i586d $s_dither"
+    more_sources="$s_fpu $s_i586d"
   ;;
   3dnow)
     # legacy 3dnow had the 3dnow paired with i586...
