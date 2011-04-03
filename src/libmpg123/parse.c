@@ -28,11 +28,50 @@
 #endif
 #define TRACK_MAX_FRAMES ULONG_MAX/4/1152
 
-#include "mpeghead.h"
-
 #include "debug.h"
 
 #define bsbufid(fr) (fr)->bsbuf==(fr)->bsspace[0] ? 0 : ((fr)->bsbuf==fr->bsspace[1] ? 1 : ( (fr)->bsbuf==(fr)->bsspace[0]+512 ? 2 : ((fr)->bsbuf==fr->bsspace[1]+512 ? 3 : -1) ) )
+
+/*
+	AAAAAAAA AAABBCCD EEEEFFGH IIJJKLMM
+	A: sync
+	B: mpeg version
+	C: layer
+	D: CRC
+	E: bitrate
+	F: sampling rate
+	G: padding
+	H: private
+	I: channel mode
+	J: mode ext
+	K: copyright
+	L: original
+	M: emphasis
+
+	old compare mask 0xfffffd00:
+	11111111 11111111 11111101 00000000
+
+	means: everything must match excluding padding and channel mode, ext mode, ...
+	But a vbr stream's headers will differ in bitrate!
+	We are already strict in allowing only frames of same type in stream, we should at least watch out for VBR while being strict.
+
+	So a better mask is:
+	11111111 11111111 00001101 00000000
+
+	Even more, I'll allow varying crc bit.
+	11111111 11111110 00001101 00000000
+
+	Still unsure about this private bit... well, as Marcel pointed out:
+	The decoder should not care about this.
+	11111111 11111110 00001100 00000000
+*/
+#define HDRCMPMASK 0xfffe0c00
+/*
+	This needs cleanup ... The parser is not as strict as documented above.
+	Here comes a mask that checks for anything that can change sampling rate.
+	This includes change of MPEG version and frequency bits.
+	00011000 00001100 00000000, BB and FF bits */
+#define HDRSAMPMASK 0x180c00
 
 /* bitrates for [mpeg1/2][layer] */
 static const int tabsel_123[2][3][16] =
@@ -66,21 +105,24 @@ long frame_freq(mpg123_handle *fr)
 	return freqs[fr->sampling_frequency];
 }
 
+#define free_format_header(head) ( ((head & 0xffe00000) == 0xffe00000) && ((head>>17)&3) && (((head>>12)&0xf) == 0x0) && (((head>>10)&0x3) != 0x3 ))
+
 /* compiler is smart enought to inline this one or should I really do it as macro...? */
 static int head_check(unsigned long head)
 {
 	if
 	(
-		((head & HDR_SYNC) != HDR_SYNC)
+		/* first 11 bits are set to 1 for frame sync */
+		((head & 0xffe00000) != 0xffe00000)
 		||
 		/* layer: 01,10,11 is 1,2,3; 00 is reserved */
-		(!(HDR_LAYER_VAL(head)))
+		(!((head>>17)&3))
 		||
 		/* 1111 means bad bitrate */
-		(HDR_BITRATE_VAL(head) == 0xf)
+		(((head>>12)&0xf) == 0xf)
 		||
 		/* sampling freq: 11 is reserved */
-		(HDR_SAMPLERATE_VAL(head) == 0x3)
+		(((head>>10)&0x3) == 0x3 )
 		/* here used to be a mpeg 2.5 check... re-enabled 2.5 decoding due to lack of evidence that it is really not good */
 	)
 	{
@@ -113,9 +155,6 @@ static int check_lame_tag(mpg123_handle *fr)
 	}
 #endif
 
-	if(fr->p.flags & MPG123_IGNORE_INFOFRAME) return 0;
-
-	/* Note: CRC or not, that does not matter here. */
 	if(fr->framesize >= 120+lame_offset) /* traditional Xing header is 120 bytes */
 	{
 		int i;
@@ -243,20 +282,21 @@ static int check_lame_tag(mpg123_handle *fr)
 					lame_offset += 4;
 				}
 				/* I guess that either 0 or LAME extra data follows */
+				/* there may this crc16 be floating around... (?) */
 				if(fr->bsbuf[lame_offset] != 0)
 				{
 					unsigned char lame_vbr;
 					float replay_gain[2] = {0,0};
 					float peak = 0;
-					/* float gain_offset = 0;  going to be +6 for old lame that used 83dB */
+					float gain_offset = 0; /* going to be +6 for old lame that used 83dB */
 					char nb[10];
 					memcpy(nb, fr->bsbuf+lame_offset, 9);
 					nb[9] = 0;
 					if(VERBOSE3) fprintf(stderr, "Note: Info: Encoder: %s\n", nb);
 					if(!strncmp("LAME", nb, 4))
 					{
-						/*gain_offset = 6;*/
-						warning("TODO: finish lame version detetcion...");
+						gain_offset = 6;
+						debug("TODO: finish lame detetcion...");
 					}
 					lame_offset += 9;
 					/* the 4 big bits are tag revision, the small bits vbr method */
@@ -372,42 +412,7 @@ static int check_lame_tag(mpg123_handle *fr)
 /* Just tell if the header is some mono. */
 static int header_mono(unsigned long newhead)
 {
-	return HDR_CHANNEL_VAL(newhead) == MPG_MD_MONO ? TRUE : FALSE;
-}
-
-static void halfspeed_prepare(mpg123_handle *fr)
-{
-	/* save for repetition */
-	if(fr->p.halfspeed && fr->lay == 3)
-	{
-		debug("halfspeed - reusing old bsbuf ");
-		memcpy (fr->ssave, fr->bsbuf, fr->ssize);
-	}
-}
-
-/* If this returns 1, the next frame is the repetition. */
-static int halfspeed_do(mpg123_handle *fr)
-{
-	/* Speed-down hack: Play it again, Sam (the frame, I mean). */
-	if (fr->p.halfspeed) 
-	{
-		if(fr->halfphase) /* repeat last frame */
-		{
-			debug("repeat!");
-			fr->to_decode = fr->to_ignore = TRUE;
-			--fr->halfphase;
-			fr->bitindex = 0;
-			fr->wordpointer = (unsigned char *) fr->bsbuf;
-			if(fr->lay == 3) memcpy (fr->bsbuf, fr->ssave, fr->ssize);
-			if(fr->error_protection) fr->crc = getbits(fr, 16); /* skip crc */
-			return 1;
-		}
-		else
-		{
-			fr->halfphase = fr->p.halfspeed - 1;
-		}
-	}
-	return 0;
+	return ((newhead>>6)&0x3) == MPG_MD_MONO ? TRUE : FALSE;
 }
 
 /*
@@ -431,7 +436,25 @@ int read_frame(mpg123_handle *fr)
 
 	fr->fsizeold=fr->framesize;       /* for Layer3 */
 
-	if(halfspeed_do(fr) == 1) return 1;
+	/* Speed-down hack: Play it again, Sam (the frame, I mean). */
+	if (fr->p.halfspeed) 
+	{
+		if(fr->halfphase) /* repeat last frame */
+		{
+			debug("repeat!");
+			fr->to_decode = fr->to_ignore = TRUE;
+			--fr->halfphase;
+			fr->bitindex = 0;
+			fr->wordpointer = (unsigned char *) fr->bsbuf;
+			if(fr->lay == 3) memcpy (fr->bsbuf, fr->ssave, fr->ssize);
+			if(fr->error_protection) fr->crc = getbits(fr, 16); /* skip crc */
+			return 1;
+		}
+		else
+		{
+			fr->halfphase = fr->p.halfspeed - 1;
+		}
+	}
 
 read_again:
 	/* In case we are looping to find a valid frame, discard any buffered data before the current position.
@@ -450,7 +473,7 @@ init_resync:
 		else
 		/* If they have the same sample rate. Note that only is _not_ the case for the first header, as we enforce sample rate match for following frames.
 			 So, during one stream, only change of stereoness is possible and indicated by header_change == 2. */
-		if((fr->oldhead & HDR_SAMPMASK) == (newhead & HDR_SAMPMASK))
+		if((fr->oldhead & HDRSAMPMASK) == (newhead & HDRSAMPMASK))
 		{
 			/* Now if both channel modes are mono or both stereo, it's no big deal. */
 			if( header_mono(fr->oldhead) == header_mono(newhead))
@@ -555,7 +578,7 @@ init_resync:
 		{
 			debug2("does next header 0x%08lx match first 0x%08lx?", nexthead, newhead);
 			/* not allowing free format yet */
-			if(!head_check(nexthead) || (nexthead & HDR_CMPMASK) != (newhead & HDR_CMPMASK))
+			if(!head_check(nexthead) || (nexthead & HDRCMPMASK) != (newhead & HDRCMPMASK))
 			{
 				debug("No, the header was not valid, start from beginning...");
 				fr->oldhead = 0; /* start over */
@@ -646,8 +669,8 @@ init_resync:
 			} while
 			(
 				!head_check(newhead) /* Simply check for any valid header... we have the readahead to get it straight now(?) */
-				/*   (newhead & HDR_CMPMASK) != (fr->oldhead & HDR_CMPMASK)
-				&& (newhead & HDR_CMPMASK) != (fr->firsthead & HDR_CMPMASK)*/
+				/*   (newhead & HDRCMPMASK) != (fr->oldhead & HDRCMPMASK)
+				&& (newhead & HDRCMPMASK) != (fr->firsthead & HDRCMPMASK)*/
 			);
 			/* too many false positives 
 			}while (!(head_check(newhead) && decode_header(fr, newhead))); */
@@ -756,7 +779,12 @@ init_resync:
 	debug4("Frame %"OFF_P" %08lx %i, next filepos=%"OFF_P, 
 	(off_p)fr->num, newhead, fr->framesize, (off_p)fr->rd->tell(fr));
 
-	halfspeed_prepare(fr);
+	/* save for repetition */
+	if(fr->p.halfspeed && fr->lay == 3)
+	{
+		debug("halfspeed - reusing old bsbuf ");
+		memcpy (fr->ssave, fr->bsbuf, fr->ssize);
+	}
 
 	/* index the position */
 #ifdef FRAME_INDEX
@@ -810,17 +838,38 @@ static int guess_freeformat_framesize(mpg123_handle *fr)
 	return ret;
 
 	/* We are already 4 bytes into it */
-	/* Fix that limit to be absolute for the first header search! */
-	for(i=4;i<65536;i++)
-	{
-		if((ret=fr->rd->head_shift(fr,&head))<=0) return ret;
-
-		/* No head_check needed, the mask contains all relevant bits. */
-		if((head & HDR_SAMEMASK) == (fr->oldhead & HDR_SAMEMASK))
+/* fix that limit to be absolute for the first header search! */
+	for(i=4;i<65536;i++) {
+		if((ret=fr->rd->head_shift(fr,&head))<=0)
 		{
-			fr->rd->back_bytes(fr,i+1);
-			fr->framesize = i-3;
-			return 1; /* Success! */
+			return ret;
+		}
+		if(head_check(head))
+		{
+			int sampling_frequency,mpeg25,lsf;
+			
+			if(head & (1<<20))
+			{
+				lsf = (head & (1<<19)) ? 0x0 : 0x1;
+				mpeg25 = 0;
+			}
+			else
+			{
+				lsf = 1;
+				mpeg25 = 1;
+			}
+			
+			if(mpeg25)
+				sampling_frequency = 6 + ((head>>10)&0x3);
+			else
+				sampling_frequency = ((head>>10)&0x3) + (lsf*3);
+			
+			if((lsf==fr->lsf) && (mpeg25==fr->mpeg25) && (sampling_frequency == fr->sampling_frequency))
+			{
+				fr->rd->back_bytes(fr,i+1);
+				fr->framesize = i-3;
+				return 1; /* Success! */
+			}
 		}
 	}
 	fr->rd->back_bytes(fr,i);
@@ -844,9 +893,9 @@ static int decode_header(mpg123_handle *fr,unsigned long newhead)
 
 		return 0;
 	}
-	if(HDR_VERSION_VAL(newhead) & 0x2)
+	if( newhead & (1<<20) )
 	{
-		fr->lsf = (HDR_VERSION_VAL(newhead) & 0x1) ? 0 : 1;
+		fr->lsf = (newhead & (1<<19)) ? 0x0 : 0x1;
 		fr->mpeg25 = 0;
 	}
 	else
@@ -856,35 +905,40 @@ static int decode_header(mpg123_handle *fr,unsigned long newhead)
 	}
 
 	if(   (fr->p.flags & MPG123_NO_RESYNC) || !fr->oldhead
-	   || (HDR_VERSION_VAL(fr->oldhead) != HDR_VERSION_VAL(newhead)) )
+	   || (((fr->oldhead>>19)&0x3) ^ ((newhead>>19)&0x3))  )
 	{
 		/* If "tryresync" is false, assume that certain
 		parameters do not change within the stream!
 		Force an update if lsf or mpeg25 settings
 		have changed. */
-		fr->lay = 4 - HDR_LAYER_VAL(newhead);
+		fr->lay = 4-((newhead>>17)&3);
+		if( ((newhead>>10)&0x3) == 0x3)
+		{
+			if(NOQUIET) error("Stream error");
+
+			return 0; /* exit() here really is too much, isn't it? */
+		}
 		if(fr->mpeg25)
-		fr->sampling_frequency = 6 + HDR_SAMPLERATE_VAL(newhead);
+		fr->sampling_frequency = 6 + ((newhead>>10)&0x3);
 		else
-		fr->sampling_frequency = HDR_SAMPLERATE_VAL(newhead) + (fr->lsf*3);
+		fr->sampling_frequency = ((newhead>>10)&0x3) + (fr->lsf*3);
 	}
 
 	#ifdef DEBUG
-	/* seen a file where this varies (old lame tag without crc, track with crc) */
-	if((HDR_CRC_VAL(newhead)^0x1) != fr->error_protection) debug("changed crc bit!");
+	if((((newhead>>16)&0x1)^0x1) != fr->error_protection) debug("changed crc bit!");
 	#endif
-	fr->error_protection = HDR_CRC_VAL(newhead)^0x1;
-	fr->bitrate_index    = HDR_BITRATE_VAL(newhead);
-	fr->padding          = HDR_PADDING_VAL(newhead);
-	fr->extension        = HDR_PRIVATE_VAL(newhead);
-	fr->mode             = HDR_CHANNEL_VAL(newhead);
-	fr->mode_ext         = HDR_CHANEX_VAL(newhead);
-	fr->copyright        = HDR_COPYRIGHT_VAL(newhead);
-	fr->original         = HDR_ORIGINAL_VAL(newhead);
-	fr->emphasis         = HDR_EMPHASIS_VAL(newhead);
-	fr->freeformat       = !(newhead & HDR_BITRATE);
+	fr->error_protection = ((newhead>>16)&0x1)^0x1; /* seen a file where this varies (old lame tag without crc, track with crc) */
+	fr->bitrate_index = ((newhead>>12)&0xf);
+	fr->padding   = ((newhead>>9)&0x1);
+	fr->extension = ((newhead>>8)&0x1);
+	fr->mode      = ((newhead>>6)&0x3);
+	fr->mode_ext  = ((newhead>>4)&0x3);
+	fr->copyright = ((newhead>>3)&0x1);
+	fr->original  = ((newhead>>2)&0x1);
+	fr->emphasis  = newhead & 0x3;
+	fr->freeformat = free_format_header(newhead);
 
-	fr->stereo = (fr->mode == MPG_MD_MONO) ? 1 : 2;
+	fr->stereo    = (fr->mode == MPG_MD_MONO) ? 1 : 2;
 
 	fr->oldhead = newhead;
 	
