@@ -97,7 +97,7 @@
 #endif
 
 /* error macros also here... */
-#ifndef NO_ERRORMSG
+#ifndef NO_ERROR
 #define error(s) fprintf(stderr, "[" __FILE__ ":%i] error: " s "\n", __LINE__)
 #define error1(s, a) fprintf(stderr, "[" __FILE__ ":%i] error: " s "\n", __LINE__, a)
 #define error2(s, a, b) fprintf(stderr, "[" __FILE__ ":%i] error: " s "\n", __LINE__, a, b)

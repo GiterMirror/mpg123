@@ -16,10 +16,6 @@
 #include <io.h>
 #endif
 
-#ifdef _WIN32
-#include <fcntl.h>
-#endif
-
 #include <stdio.h>
 
 #define INBUFF  16384
@@ -34,11 +30,6 @@ int main(int argc, char **argv)
 	int ret;
 	size_t in = 0, outc = 0;
 	mpg123_handle *m;
-
-#ifdef _WIN32
-_setmode(_fileno(stdin),_O_BINARY);
-_setmode(_fileno(stdout),_O_BINARY);
-#endif
 
 	mpg123_init();
 	m = mpg123_new(argc > 1 ? argv[1] : NULL, &ret);

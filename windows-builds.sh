@@ -116,9 +116,7 @@ mpg123_build()
 		for i in $tmp/lib/mpg123/*.dll
 		do
 			if test -e "$i"; then
-				plugdir="$final/$name/plugins"
-				mkdir -p "$plugdir" &&
-				cp -v "$i" "$plugdir"
+				cp -v "$i" "$final/$name/plugins"
 			fi
 		done
 	fi &&

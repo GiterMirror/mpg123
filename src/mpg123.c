@@ -66,8 +66,6 @@ struct parameter param = {
   0,      /* destination (headphones, ...) */
 #ifdef HAVE_TERMIOS
   FALSE , /* term control */
-  MPG123_TERM_USR1,
-  MPG123_TERM_USR2,
 #endif
   FALSE , /* checkrange */
   0 ,	  /* force_reopen, always (re)opens audio device for next song */
@@ -197,10 +195,10 @@ void safe_exit(int code)
 
 	httpdata_free(&htd);
 
-#ifdef WANT_WIN32_UNICODE
+#ifdef WIN32_WANT_UNICODE
 	win32_cmdline_free(argc, argv); /* This handles the premature argv == NULL, too. */
 #endif
-#if defined (WANT_WIN32_UNICODE)
+#if defined (WANT_WIN32_SOCKETS)
 	win32_net_deinit();
 #endif
 	/* It's ugly... but let's just fix this still-reachable memory chunk of static char*. */
@@ -297,19 +295,10 @@ static void set_out_file(char *arg)
 {
 	param.outmode=DECODE_FILE;
 	#ifdef WIN32
-	#ifdef WANT_WIN32_UNICODE
-	wchar_t *argw = NULL;
-	OutputDescriptor = win32_utf8_wide(arg, &argw, NULL);
-	if(argw == NULL) goto openfail;
-	OutputDescriptor=_wopen(argw,_O_CREAT|_O_WRONLY|_O_BINARY|_O_TRUNC,0666);
-	free(argw);
-	#else
 	OutputDescriptor=_open(arg,_O_CREAT|_O_WRONLY|_O_BINARY|_O_TRUNC,0666);
-	#endif /*WANT_WIN32_UNICODE*/
-	#else /*WIN32*/
+	#else
 	OutputDescriptor=open(arg,O_CREAT|O_WRONLY|O_TRUNC,0666);
-	#endif /*WIN32*/
-	openfail:
+	#endif
 	if(OutputDescriptor==-1)
 	{
 		error2("Can't open %s for writing (%s).\n",arg,strerror(errno));
@@ -403,8 +392,6 @@ topt opts[] = {
 	{'n', "frames",      GLO_ARG | GLO_LONG, 0, &param.frame_number,  0},
 	#ifdef HAVE_TERMIOS
 	{'C', "control",     GLO_INT,  0, &param.term_ctrl, TRUE},
-	{0,   "ctrlusr1",    GLO_ARG | GLO_CHAR, 0, &param.term_usr1, 0},
-	{0,   "ctrlusr2",    GLO_ARG | GLO_CHAR, 0, &param.term_usr2, 0},
 	#endif
 #ifndef NOXFERMEM
 	{'b', "buffer",      GLO_ARG | GLO_LONG, 0, &param.usebuffer,  0},
@@ -482,7 +469,6 @@ topt opts[] = {
 	{0, "skip-id3v2", GLO_INT, set_frameflag, &frameflag, MPG123_SKIP_ID3V2},
 	{0, "streamdump", GLO_ARG|GLO_CHAR, 0, &param.streamdump, 0},
 	{0, "icy-interval", GLO_ARG|GLO_LONG, 0, &param.icy_interval, 0},
-	{0, "ignore-streamlength", GLO_INT, set_frameflag, &frameflag, MPG123_IGNORE_STREAMLENGTH},
 	{0, 0, 0, 0, 0, 0}
 };
 
@@ -653,6 +639,11 @@ int play_frame(void)
 		if(fresh && framenum >= param.start_frame)
 		{
 			fresh = FALSE;
+			if(!param.quiet)
+			{
+				if(param.verbose) print_header(mh);
+				else print_header_compact(mh);
+			}
 		}
 		/* Normal flushing of data, includes buffer decoding. */
 		if(flush_output(ao, audio, bytes) < (int)bytes && !intflag)
@@ -684,14 +675,8 @@ int play_frame(void)
 			long rate;
 			int channels, format;
 			mpg123_getformat(mh, &rate, &channels, &format);
-			if(param.verbose > 2) fprintf(stderr, "\nNote: New output format %liHz %ich, format %i\n", rate, channels, format);
+			if(param.verbose > 2) fprintf(stderr, "Note: New output format %liHz %ich, format %i\n", rate, channels, format);
 
-			if(!param.quiet)
-			{
-				fprintf(stderr, "\n");
-				if(param.verbose) print_header(mh);
-				else print_header_compact(mh);
-			}
 			reset_audio(rate, channels, format);
 		}
 	}
@@ -1275,7 +1260,6 @@ static void long_usage(int err)
 	fprintf(o,"        --resync-limit <n> Set number of bytes to search for valid MPEG data; <0 means search whole stream.\n");
 	fprintf(o,"        --streamdump <f>   Dump a copy of input data (as read by libmpg123) to given file.\n");
 	fprintf(o,"        --icy-interval <n> Enforce ICY interval in bytes (for playing a stream dump.\n");
-	fprintf(o,"        --ignore-streamlength Ignore header info about length of MPEG streams.");
 	fprintf(o,"\noutput/processing options\n\n");
 	fprintf(o," -o <o> --output <o>       select audio output module\n");
 	fprintf(o,"        --list-modules     list the available modules\n");
@@ -1337,10 +1321,6 @@ static void long_usage(int err)
 	fprintf(o," -q     --quiet            quiet mode\n");
 	#ifdef HAVE_TERMIOS
 	fprintf(o," -C     --control          enable terminal control keys\n");
-	fprintf(o,"        --ctrlusr1 <c>     control key (characer) to map to SIGUSR1\n");
-	fprintf(o,"                           (default is for stop/start)\n");
-	fprintf(o,"        --ctrlusr2 <c>     control key (characer) to map to SIGUSR2\n");
-	fprintf(o,"                           (default is for next track)\n");
 	#endif
 	#ifndef GENERIC
 	fprintf(o,"        --title            set xterm/rxvt title to filename\n");

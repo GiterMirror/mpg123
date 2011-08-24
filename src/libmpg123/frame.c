@@ -59,11 +59,6 @@ static void frame_default_pars(mpg123_pars *mp)
 #endif
 	mp->preframes = 4; /* That's good  for layer 3 ISO compliance bitstream. */
 	mpg123_fmt_all(mp);
-	/* Default of keeping some 4K buffers at hand, should cover the "usual" use case (using 16K pipe buffers as role model). */
-#ifndef NO_FEEDER
-	mp->feedpool = 5; 
-	mp->feedbuffer = 4096;
-#endif
 }
 
 void frame_init(mpg123_handle *fr)
@@ -115,10 +110,6 @@ void frame_init_par(mpg123_handle *fr, mpg123_pars *mp)
 	fr->err = MPG123_OK;
 	if(mp == NULL) frame_default_pars(&fr->p);
 	else memcpy(&fr->p, mp, sizeof(struct mpg123_pars_struct));
-
-#ifndef NO_FEEDER
-	bc_prepare(&fr->rdat.buffer, fr->p.feedpool, fr->p.feedbuffer);
-#endif
 
 	fr->down_sample = 0; /* Initialize to silence harmless errors when debugging. */
 	frame_fixed_reset(fr); /* Reset only the fixed data, dynamic buffers are not there yet! */
@@ -484,7 +475,6 @@ static void frame_fixed_reset(mpg123_handle *fr)
 	fr->metaflags = 0;
 	fr->outblock = mpg123_safe_buffer();
 	fr->num = -1;
-	fr->input_offset = -1;
 	fr->playnum = -1;
 	fr->accurate = TRUE;
 	fr->silent_resync = 0;
@@ -580,9 +570,6 @@ void frame_exit(mpg123_handle *fr)
 		fr->wrapperclean(fr->wrapperdata);
 		fr->wrapperdata = NULL;
 	}
-#ifndef NO_FEEDER
-	bc_cleanup(&fr->rdat.buffer);
-#endif
 }
 
 int attribute_align_arg mpg123_info(mpg123_handle *mh, struct mpg123_frameinfo *mi)
@@ -618,17 +605,6 @@ int attribute_align_arg mpg123_info(mpg123_handle *mh, struct mpg123_frameinfo *
 	return MPG123_OK;
 }
 
-int attribute_align_arg mpg123_framedata(mpg123_handle *mh, unsigned long *header, unsigned char **bodydata, size_t *bodybytes)
-{
-	if(mh == NULL)     return MPG123_ERR;
-	if(!mh->to_decode) return MPG123_ERR;
-
-	if(header    != NULL) *header    = mh->oldhead;
-	if(bodydata  != NULL) *bodydata  = mh->bsbuf;
-	if(bodybytes != NULL) *bodybytes = mh->framesize;
-
-	return MPG123_OK;
-}
 
 /*
 	Fuzzy frame offset searching (guessing).
@@ -1011,9 +987,3 @@ int attribute_align_arg mpg123_getvolume(mpg123_handle *mh, double *base, double
 	return MPG123_OK;
 }
 
-off_t attribute_align_arg mpg123_framepos(mpg123_handle *mh)
-{
-	if(mh == NULL) return MPG123_ERR;
-
-	return mh->input_offset;
-}

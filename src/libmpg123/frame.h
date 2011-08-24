@@ -77,10 +77,6 @@ struct mpg123_pars_struct
 	long resync_limit;
 	long index_size; /* Long, because: negative values have a meaning. */
 	long preframes;
-#ifndef NO_FEEDER
-	long feedpool;
-	long feedbuffer;
-#endif
 };
 
 
@@ -203,7 +199,6 @@ struct mpg123_handle_struct
 	int freesize;  /* free format frame size */
 	enum mpg123_vbr vbr; /* 1 if variable bitrate was detected */
 	off_t num; /* frame offset ... */
-	off_t input_offset; /* byte offset of this frame in input stream */
 	off_t playnum; /* playback offset... includes repetitions, reset at seeks */
 	off_t audio_start; /* The byte offset in the file where audio data begins. */
 	char accurate; /* Flag to see if we trust the frame number. */
@@ -242,9 +237,7 @@ struct mpg123_handle_struct
 	unsigned char *bsbuf;
 	unsigned char *bsbufold;
 	int bsnum;
-	/* That is the header matching the last read frame body. */
 	unsigned long oldhead;
-	/* That is the header that is supposedly the first of the stream. */
 	unsigned long firsthead;
 	int abr_rate;
 #ifdef FRAME_INDEX
