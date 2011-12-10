@@ -1,48 +1,43 @@
 /*
-	equalizer: code for loading equalizer settings
+	equalizer.c: equalizer settings
 
-	copyright 1995-2008 by the mpg123 project - free software under the terms of the LGPL 2.1
-	see COPYING and AUTHORS files in distribution or http://mpg123.org
-	initially written by Michael Hipp (exported to this file by Thomas Orgis)
+	copyright ?-2006 by the mpg123 project - free software under the terms of the LGPL 2.1
+	see COPYING and AUTHORS files in distribution or http://mpg123.de
+	initially written by Michael Hipp
 */
 
-#include "mpg123app.h"
 
-/* Load the settings from the path in the global variable equalfile.
-   If there is no file, restore equalizer defaults. */
-int load_equalizer(mpg123_handle *mh)
+#include "config.h"
+#include "mpg123.h"
+
+real equalizer[2][32];
+real equalizer_sum[2][32];
+int equalizer_cnt;
+
+real equalizerband[2][SBLIMIT*SSLIMIT];
+
+void do_equalizer(real *bandPtr,int channel) 
 {
-	if(equalfile != NULL)
-	{ /* tst; ThOr: not TRUE or FALSE: allocated or not... */
-		FILE *fe;
-		int i;
-		fe = fopen(equalfile,"r");
-		if(fe) {
-			char line[256];
-			for(i=0;i<32;i++) {
-				float e0 = 1.0;
-				float e1 = 1.0; /* %f -> float! */
-				do /* ignore comments */
-				{
-					line[0]=0;
-					fgets(line,255,fe);
-				}
-				while(line[0]=='#');
-				/* Hm, why not use fscanf? Comments... */
-				sscanf(line,"%f %f",&e0,&e1);
-				/* If scanning failed, we have default 1.0 value. */
-				mpg123_eq(mh, MPG123_LEFT,  i, e0);
-				mpg123_eq(mh, MPG123_RIGHT, i, e1);
-			}
-			fclose(fe);
-		}
-		else
-		{
-			fprintf(stderr,"Can't open equalizer file '%s'\n",equalfile);
-			return -1;
-		}
-	}
-	else mpg123_reset_eq(mh);
+	int i;
 
-	return 0;
+	if(have_eq_settings) {
+		for(i=0;i<32;i++)
+			bandPtr[i] = REAL_MUL(bandPtr[i], equalizer[channel][i]);
+	}
+
+/*	if(param.equalizer & 0x2) {
+		
+		for(i=0;i<32;i++)
+			equalizer_sum[channel][i] += bandPtr[i];
+	}
+*/
 }
+
+void do_equalizerband(real *bandPtr,int channel)
+{
+  int i;
+  for(i=0;i<576;i++) {
+    bandPtr[i] = REAL_MUL(bandPtr[i], equalizerband[channel][i]);
+  }
+}
+

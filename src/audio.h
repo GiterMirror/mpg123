@@ -2,7 +2,7 @@
 	audio: audio output interface
 
 	copyright ?-2006 by the mpg123 project - free software under the terms of the LGPL 2.1
-	see COPYING and AUTHORS files in distribution or http://mpg123.org
+	see COPYING and AUTHORS files in distribution or http://mpg123.de
 	initially written by Michael Hipp
 */
 
@@ -13,10 +13,6 @@
 
 #ifndef _MPG123_AUDIO_H_
 #define _MPG123_AUDIO_H_
-
-#include "compat.h"
-#include "mpg123.h"
-#include "module.h"
 
 #define AUDIO_OUT_HEADPHONES       0x01
 #define AUDIO_OUT_INTERNAL_SPEAKER 0x02
@@ -33,74 +29,60 @@ enum {
 	DECODE_AUDIOFILE
 };
 
+#define AUDIO_FORMAT_MASK	  0x100
+#define AUDIO_FORMAT_16		  0x100
+#define AUDIO_FORMAT_8		  0x000
+
+#define AUDIO_FORMAT_SIGNED_16    0x110
+#define AUDIO_FORMAT_UNSIGNED_16  0x120
+#define AUDIO_FORMAT_UNSIGNED_8   0x1
+#define AUDIO_FORMAT_SIGNED_8     0x2
+#define AUDIO_FORMAT_ULAW_8       0x4
+#define AUDIO_FORMAT_ALAW_8       0x8
+
 /* 3% rate tolerance */
 #define AUDIO_RATE_TOLERANCE	  3
 
-typedef struct audio_output_struct
+
+
+struct audio_info_struct
 {
-	int fn;			/* filenumber */
-	void *userptr;	/* driver specific pointer */
-	
-	/* Callbacks */
-	int (*open)(struct audio_output_struct *);
-	int (*get_formats)(struct audio_output_struct *);
-	int (*write)(struct audio_output_struct *, unsigned char *,int);
-	void (*flush)(struct audio_output_struct *);
-	int (*close)(struct audio_output_struct *);
-	int (*deinit)(struct audio_output_struct *);
-	
-	/* the module this belongs to */
-	mpg123_module_t *module;
-	
-	char *device;	/* device name */
-	int   flags;	/* some bits; namely headphone/speaker/line */
-	long rate;		/* sample rate */
-	long gain;		/* output gain */
-	int channels;	/* number of channels */
-	int format;		/* format flags */
-	int is_open;	/* something opened? */
-#define MPG123_OUT_QUIET 1
-	int auxflags; /* For now just one: quiet mode (for probing). */
-} audio_output_t;
+  int fn; /* filenumber */
+  void *handle;	/* driver specific pointer */
 
-/* Lazy. */
-#define AOQUIET (ao->auxflags & MPG123_OUT_QUIET)
+  long rate;
+  long gain;
+  int output;
 
-struct audio_format_name {
-	int  val;
-	char *name;
-	char *sname;
+  char *device;
+  int channels;
+  int format;
+
 };
 
-#define pitch_rate(rate)	(param.pitch == 0 ? (rate) : (long) ((param.pitch+1.0)*(rate)))
+struct audio_name {
+  int  val;
+  char *name;
+  char *sname;
+};
+
 
 /* ------ Declarations from "audio.c" ------ */
 
-audio_output_t* open_output_module( const char* name );
-void close_output_module( audio_output_t* ao );
-audio_output_t* alloc_audio_output();
-void audio_capabilities(audio_output_t *ao, mpg123_handle *mh);
-int audio_fit_capabilities(audio_output_t *ao,int c,int r);
-const char* audio_encoding_name(const int encoding, const int longer);
-void print_capabilities(audio_output_t *ao, mpg123_handle *mh);
+extern void audio_info_struct_init(struct audio_info_struct *);
+extern void audio_info_struct_dump(struct audio_info_struct *ai);
+extern void audio_capabilities(struct audio_info_struct *);
+extern int audio_fit_capabilities(struct audio_info_struct *ai,int c,int r);
+extern char *audio_encoding_name(int format);
 
-int init_output(audio_output_t **ao);
-void exit_output(audio_output_t *ao, int rude);
-int flush_output(audio_output_t *ao, unsigned char *bytes, size_t count);
-int open_output(audio_output_t *ao);
-void close_output(audio_output_t *ao );
-int reset_output(audio_output_t *ao);
-void output_pause(audio_output_t *ao);  /* Prepare output for inactivity. */
-void output_unpause(audio_output_t *ao); /* Reactivate output (buffer process). */
 
-void audio_enclist(char** list); /* Make a string of encoding names. */
+/* ------ Declarations from "audio_*.c" ------ */
 
-/*
-	Twiddle audio output rate to yield speedup/down (pitch) effect.
-	The actually achieved pitch value is stored in param.pitch.
-	Returns 1 if pitch setting succeeded, 0 otherwise.
-*/
-int set_pitch(mpg123_handle *fr, audio_output_t *ao, double new_pitch);
+extern int audio_open(struct audio_info_struct *);
+extern int audio_get_formats(struct audio_info_struct *);
+extern int audio_play_samples(struct audio_info_struct *, unsigned char *,int);
+extern void audio_queueflush(struct audio_info_struct *ai);
+extern int audio_close(struct audio_info_struct *);
 
 #endif
 

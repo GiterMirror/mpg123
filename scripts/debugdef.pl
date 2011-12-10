@@ -22,8 +22,8 @@ print <<EOT;
 
 /*
 	I could do that with variadic macros available:
-	#define sdebug(me, s) fprintf(stderr, "[location] " s "\\n")
-	#define debug(me, s, ...) fprintf(stderr, "[location] " s "\}n", __VA_ARGS__)
+	#define sdebug(me, s) fprintf(stderr, "[" me "] " s "\n")
+	#define debug(me, s, ...) fprintf(stderr, "[" me "] " s "\n", __VA_ARGS__)
 
 	Variadic macros are a C99 feature...
 	Now just predefining stuff non-variadic for up to $num arguments.
@@ -31,21 +31,17 @@ print <<EOT;
 */
 
 #ifdef DEBUG
-#include <stdio.h>
+	#include <stdio.h>
 EOT
 printdefs(1);
 print "#else\n";
 printdefs(0);
 print "#endif\n";
 
-foreach my $t ('warning', 'error', 'ereturn')
+for('warning', 'error')
 {
-	print "\n/* $t macros also here... */\n";
-	print "#ifndef NO_".uc($t)."\n";
-	printdefs(1, $t);
-	print "#else\n";
-	printdefs(0, $t);
-	print "#endif\n";
+	print "\n/* $_ macros also here... */\n";
+	printdefs(1, $_);
 }
 
 sub printdefs
@@ -54,25 +50,15 @@ sub printdefs
 	my $type = shift;
 	$type = 'debug' unless defined $type;
 	my $i;
-	my $pre = ''; my $post = ''; my $rv = '';
-	my $notreal = '';
-	if($type eq 'ereturn')
-	{
-		$pre  = 'do{ ';
-		$post = '; return rv; }while(0)';
-		$rv   = 'rv, ';
-		$notreal = 'return rv';
-	}
 	while(++$i <= $num+1)
 	{
 		my @args, my $j;
 		while(++$j < $i){ push(@args, chr(ord('a')+$j-1)); }
 		unshift(@args, '') if(@args);
-		print '#define '.$type.($i > 1 ? ($i-1) : '').'('.$rv.'s';
+		print '	#define '.$type.($i > 1 ? ($i-1) : '').'(s';
 		print join(', ', @args).') ';
-		if($forreal){ print $pre.'fprintf(stderr, "[" __FILE__ ":%i] '.$type.': " s "\n", __LINE__'.join(', ', @args).")$post\n"; }
-		#else{ print "do {} while(0)\n"; } 
-		else{ print "$notreal\n"; }
+		if($forreal){ print 'fprintf(stderr, "[" __FILE__ ":%i] '.$type.': " s "\n", __LINE__'.join(', ', @args).");\n"; }
+		else{ print "{}\n"; } 
 	}
 }
 

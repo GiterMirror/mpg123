@@ -2,7 +2,7 @@
 	getlopt: command line option/parameter parsing
 
 	copyright ?-2006 by the mpg123 project - free software under the terms of the LGPL 2.1
-	see COPYING and AUTHORS files in distribution or http://mpg123.org
+	see COPYING and AUTHORS files in distribution or http://mpg123.de
 	initially written Oliver Fromme
 	old timestamp: Tue Apr  8 07:13:39 MET DST 1997
 */
@@ -33,7 +33,6 @@ for .... no flag) */
 #define GLO_CHAR 2
 #define GLO_INT  4
 #define GLO_LONG 8
-#define GLO_DOUBLE 16
 
 /* flags:
  *	bit 0 = 0 - no argument

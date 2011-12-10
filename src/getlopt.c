@@ -1,21 +1,31 @@
 /*
 	getlopt: command line option/parameter parsing
 
-	copyright ?-2008 by the mpg123 project - free software under the terms of the LGPL 2.1
-	see COPYING and AUTHORS files in distribution or http://mpg123.org
+	copyright ?-2006 by the mpg123 project - free software under the terms of the LGPL 2.1
+	see COPYING and AUTHORS files in distribution or http://mpg123.de
 	initially written Oliver Fromme
 	old timestamp: Tue Apr  8 07:15:13 MET DST 1997
 */
 
 #include <stdio.h>
 #include "config.h"
-#include "getlopt.h"
-#include "compat.h"
 #include "debug.h"
+#include "getlopt.h"
 
 int loptind = 1;	/* index in argv[] */
 int loptchr = 0;	/* index in argv[loptind] */
 char *loptarg;		/* points to argument if present, else to option */
+
+#if defined(ultrix) || defined(ULTRIX)
+char *strdup (char *src)
+{
+	char *dest;
+
+	if (!(dest = (char *) malloc(strlen(src)+1)))
+		return (NULL);
+	return (strcpy(dest, src));
+}
+#endif
 
 topt *findopt (int islong, char *opt, topt *opts)
 {
@@ -61,7 +71,6 @@ int performoption (int argc, char *argv[], topt *opt)
 				debug1("int at %p", opt->var);
 				*( (int *) opt->var ) = (int) opt->value;
 			}
-			/* GLO_DOUBLE is not supported here */
 			else prog_error();
 								
 			debug("casting assignment done");
@@ -81,8 +90,6 @@ int performoption (int argc, char *argv[], topt *opt)
 				*((long *) opt->var) = atol(loptarg);
 			else if(opt->flags & GLO_INT)
 				*((int *) opt->var) = atoi(loptarg);
-			else if(opt->flags & GLO_DOUBLE)
-				*((double *) opt->var) = atof(loptarg);
 			else prog_error();
 		}
 		else

@@ -1,28 +1,21 @@
 /*
 	playlist: playlist logic
 
-	copyright 1995-2008 by the mpg123 project - free software under the terms of the LGPL 2.1
-	see COPYING and AUTHORS files in distribution or http://mpg123.org
+	copyright 1995-2006 by the mpg123 project - free software under the terms of the LGPL 2.1
+	see COPYING and AUTHORS files in distribution or http://mpg123.de
 	initially written by Michael Hipp, outsourced/reorganized by Thomas Orgis
 
 	If we officially support Windows again, we should have this reworked to really cope with Windows paths, too.
 */
 
-#include "mpg123app.h"
+#include "config.h"
+#include "mpg123.h"
 #include "getlopt.h" /* for loptind */
+#include "debug.h"
 #include "term.h" /* for term_restore */
 #include "playlist.h"
-#include "httpget.h"
-#include <time.h> /* For srand(). */
-#include "debug.h"
 
-#ifdef HAVE_RANDOM
-#define RAND random
-#define SRAND srandom
-#else
-#define RAND rand
-#define SRAND srand
-#endif
+#include <time.h>
 
 /* increase linebuf in blocks of ... bytes */
 #define LINEBUF_STEP 100
@@ -42,6 +35,7 @@ playlist_struct pl;
 
 int add_next_file (int argc, char *argv[]);
 void shuffle_playlist();
+void print_playlist();
 void init_playlist();
 int add_copy_to_playlist(char* new_entry);
 int add_to_playlist(char* new_entry, char freeit);
@@ -59,67 +53,32 @@ void prepare_playlist(int argc, char** argv)
 	if(param.verbose > 1)
 	{
 		fprintf(stderr, "\nplaylist in normal order:\n");
-		print_playlist(stderr, 0);
+		print_playlist();
 		fprintf(stderr, "\n");
 	}
 	if(param.shuffle == 1) shuffle_playlist();
 	/* Don't need these anymore, we have copies! */
-	mpg123_free_string(&pl.linebuf);
-	mpg123_free_string(&pl.dir);
-}
-
-/* Return a random number >= 0 and < n */
-static size_t rando(size_t n)
-{
-	long ran;
-	long limit = RAND_MAX - (RAND_MAX % (long)n);
-	if(n<2) return 0; /* Better settle that here than in an endless loop... */
-	do{ ran = RAND(); }while( ran >= limit );
-	return (size_t)(ran%n);
+	free_stringbuf(&pl.linebuf);
+	free_stringbuf(&pl.dir);
 }
 
 char *get_next_file()
 {
-	struct listitem *newitem = NULL;
+	char *newfile;
 
-	if(pl.fill == 0) return NULL;
-
-	++pl.playcount;
-
+	if(pl.fill == 0) newfile = NULL;
+	else
 	/* normal order, just pick next thing */
 	if(param.shuffle < 2)
 	{
-		do
-		{
-			if(pl.pos < pl.fill) newitem = &pl.list[pl.pos];
-			else newitem = NULL;
-			/* if we have rounds left, decrease loop, else reinit loop because it's a new track */
-			if(pl.loop > 0) --pl.loop; /* loop for current track... */
-			if(pl.loop == 0)
-			{
-				pl.loop = param.loop;
-				++pl.pos;
-			}
-		} while(pl.loop == 0 && newitem != NULL);
+		if(pl.pos < pl.fill) newfile = pl.list[pl.pos].url;
+		else newfile = NULL;
+		++pl.pos;
 	}
-	else
-	{	/* Randomly select files, with repeating... but keep track of current track for playlist printing. */
-		do /* limiting randomness: don't repeat too early */
-		{
-			pl.pos = rando(pl.fill);
-		} while( pl.list[pl.pos].playcount && (pl.playcount - pl.list[pl.pos].playcount) <= pl.fill/2 );
+	/* randomly select files, with repeating */
+	else newfile = pl.list[ (size_t) rand() % pl.fill ].url;
 
-		newitem = &pl.list[pl.pos];
-	}
-
-	/* "-" is STDOUT, "" is dumb, NULL is nothing */
-	if(newitem != NULL)
-	{
-		/* Remember the playback position of the track. */
-		newitem->playcount = pl.playcount;
-		return newitem->url;
-	}
-	else return NULL;
+	return newfile;
 }
 
 /* It doesn't really matter on program exit, but anyway...
@@ -140,29 +99,24 @@ void free_playlist()
 		pl.size = 0;
 		debug("free()d the playlist");
 	}
-	mpg123_free_string(&pl.linebuf);
-	mpg123_free_string(&pl.dir);
+	free_stringbuf(&pl.linebuf);
+	free_stringbuf(&pl.dir);
 }
 
 /* the constructor... */
 void init_playlist()
 {
-	SRAND(time(NULL));
+	srand(time(NULL));
 	pl.file = NULL;
 	pl.entry = 0;
-	pl.playcount = 0;
 	pl.size = 0;
 	pl.fill = 0;
 	pl.pos = 0;
 	pl.list = NULL;
 	pl.alloc_step = 10;
-	mpg123_init_string(&pl.dir);
-	mpg123_init_string(&pl.linebuf);
+	init_stringbuf(&pl.dir);
+	init_stringbuf(&pl.linebuf);
 	pl.type = UNKNOWN;
-	pl.loop = param.loop;
-#ifdef WANT_WIN32_SOCKETS
-	pl.sockd = -1;
-#endif
 }
 
 /*
@@ -185,7 +139,7 @@ int add_next_file (int argc, char *argv[])
 		if ((slashpos=strrchr(param.listname, '/')))
 		{
 			/* up to and including /, with space for \0 */
-			if(mpg123_resize_string(&pl.dir, 2 + slashpos - param.listname))
+			if(resize_stringbuf(&pl.dir, 2 + slashpos - param.listname))
 			{
 				memcpy(pl.dir.p, param.listname, pl.dir.size-1);
 				pl.dir.p[pl.dir.size-1] = 0;
@@ -201,11 +155,7 @@ int add_next_file (int argc, char *argv[])
 	if (param.listname || pl.file)
 	{
 		size_t line_offset = 0;
-#ifndef WANT_WIN32_SOCKETS
 		if (!pl.file)
-#else
-		if (!pl.file && pl.sockd == -1)
-#endif
 		{
 			/* empty or "-" */
 			if (!*param.listname || !strcmp(param.listname, "-"))
@@ -217,32 +167,18 @@ int add_next_file (int argc, char *argv[])
 			else if (!strncmp(param.listname, "http://", 7))
 			{
 				int fd;
-				struct httpdata htd;
-				httpdata_init(&htd);
-#ifndef WANT_WIN32_SOCKETS
-				fd = http_open(param.listname, &htd);
-#else
-				fd = win32_net_http_open(param.listname, &htd);
-#endif
-				debug1("htd.content_type.p: %p", (void*) htd.content_type.p);
-				if(!param.ignore_mime && htd.content_type.p != NULL)
+				char *listmime = NULL;
+				fd = http_open(param.listname, &listmime);
+				debug1("listmime: %p", (void*) listmime);
+				if(listmime != NULL)
 				{
-					int mimi;
-					debug1("htd.content_type.p value: %s", htd.content_type.p);
-					mimi = debunk_mime(htd.content_type.p);
-
-					if(mimi & IS_M3U) pl.type = M3U;
-					else if(mimi & IS_PLS)	pl.type = PLS;
+					debug1("listmime value: %s", listmime);
+					if(!strcmp("audio/x-mpegurl", listmime))	pl.type = M3U;
+					else if(!strcmp("audio/x-scpls", listmime) || !strcmp("application/pls", listmime))	pl.type = PLS;
 					else
 					{
-#ifndef WANT_WIN32_SOCKETS
 						if(fd >= 0) close(fd);
-#else
-						if(fd != SOCKET_ERROR) win32_net_close(fd);
-#endif
-						fd = -1;
-						
-						if(mimi & IS_FILE)
+						if(!strcmp("audio/mpeg", listmime) || !strcmp("audio/x-mpeg", listmime))
 						{
 							pl.type = NO_LIST;
 							if(param.listentry < 0)
@@ -257,27 +193,21 @@ int add_next_file (int argc, char *argv[])
 								return 1;
 							}
 						}
-						error1("Unknown playlist MIME type %s; maybe "PACKAGE_NAME" can support it in future if you report this to the maintainer.", htd.content_type.p);
+						fprintf(stderr, "Error: unknown playlist MIME type %s; maybe "PACKAGE_NAME" can support it in future if you report this to the maintainer.\n", listmime);
+						fd = -1;
 					}
-					httpdata_free(&htd);
+					free(listmime);
 				}
 				if(fd < 0)
 				{
 					param.listname = NULL;
 					pl.file = NULL;
-#ifdef WANT_WIN32_SOCKETS
-					pl.sockd = -1;
-#endif
-					error("Invalid playlist from http_open()!\n");
+					fprintf(stderr, "Error: invalid playlist from http_open()!\n");
 				}
 				else
 				{
 					pl.entry = 0;
-#ifndef WANT_WIN32_SOCKETS
 					pl.file = fdopen(fd,"r");
-#else
-					pl.sockd = fd;
-#endif
 				}
 			}
 			else if (!(pl.file = fopen(param.listname, "rb")))
@@ -294,11 +224,7 @@ int add_next_file (int argc, char *argv[])
 			firstline = 1; /* just opened */
 		}
 		/* reading the file line by line */
-#ifndef WANT_WIN32_SOCKETS
 		while (pl.file)
-#else
-		while (pl.file || (pl.sockd) != -1)
-#endif
 		{
 			/*
 				now read a string of arbitrary size...
@@ -312,18 +238,14 @@ int add_next_file (int argc, char *argv[])
 				/* have is the length of the string read, without the closing \0 */
 				if(pl.linebuf.size <= have+1)
 				{
-					if(!mpg123_resize_string(&pl.linebuf, pl.linebuf.size+LINEBUF_STEP))
+					if(!resize_stringbuf(&pl.linebuf, pl.linebuf.size+LINEBUF_STEP))
 					{
 						error("cannot increase line buffer");
 						break;
 					}
 				}
 				/* I rely on fgets writing the \0 at the end! */
-#ifndef WANT_WIN32_SOCKETS
 				if(fgets(pl.linebuf.p+have, pl.linebuf.size-have, pl.file))
-#else
-				if( (pl.file ? (fgets(pl.linebuf.p+have, pl.linebuf.size-have, pl.file)) : (win32_net_fgets(pl.linebuf.p+have, pl.linebuf.size-have, pl.sockd))))
-#endif
 				{
 					have += strlen(pl.linebuf.p+have);
 					debug2("have read %lu characters into linebuf: [%s]", (unsigned long)have, pl.linebuf.p);
@@ -336,6 +258,7 @@ int add_next_file (int argc, char *argv[])
 			} while(have && pl.linebuf.p[have-1] != '\r' && pl.linebuf.p[have-1] != '\n');
 			if(have)
 			{
+				size_t i;
 				pl.linebuf.p[strcspn(pl.linebuf.p, "\t\n\r")] = '\0';
 				/* a bit of fuzzyness */
 				if(firstline)
@@ -383,13 +306,10 @@ int add_next_file (int argc, char *argv[])
 					firstline = 0;
 				}
 				#if !defined(WIN32)
-				{
-				size_t i;
 				/* convert \ to / (from MS-like directory format) */
 				for (i=0;pl.linebuf.p[i]!='\0';i++)
 				{
 					if (pl.linebuf.p[i] == '\\')	pl.linebuf.p[i] = '/';
-				}
 				}
 				#endif
 				if (pl.linebuf.p[0]=='\0') continue; /* skip empty lines... */
@@ -450,7 +370,7 @@ int add_next_file (int argc, char *argv[])
 					need = pl.dir.size + strlen(pl.linebuf.p+line_offset);
 					if(pl.linebuf.size < need)
 					{
-						if(!mpg123_resize_string(&pl.linebuf, need))
+						if(!resize_stringbuf(&pl.linebuf, need))
 						{
 							error("unable to enlarge linebuf for appending path! skipping");
 							continue;
@@ -473,16 +393,9 @@ int add_next_file (int argc, char *argv[])
 			else
 			{
 				if (param.listname)
-				if(pl.file) fclose (pl.file);
+				fclose (pl.file);
 				param.listname = NULL;
 				pl.file = NULL;
-#ifdef WANT_WIN32_SOCKETS
-				if( pl.sockd != -1)
-				{
-				  win32_net_close(pl.sockd);
-				  pl.sockd = -1;
-				}
-#endif
 			}
 		}
 	}
@@ -500,12 +413,26 @@ void shuffle_playlist()
 	size_t rannum;
 	if(pl.fill >= 2)
 	{
-		/* Refer to bug 1777621 for discussion on that.
-		   It's Durstenfeld... */
 		for (loop = 0; loop < pl.fill; loop++)
 		{
 			struct listitem tmp;
-			rannum = loop + rando(pl.fill-loop);
+			/*
+				rand gives integer 0 <= RAND_MAX
+				dividing this by (fill-1)*4 and taking the rest gives something 0 <= x < (fill-1)*4
+				now diving x by 4 gives 0 <= y < fill-1
+				then adding 1 if y >= loop index... makes 1 <= z <= fill-1
+				if y not >= loop index that means... what?
+
+				rannum = (rand() % (fill * 4 - 4)) / 4;
+				rannum += (rannum >= loop);
+
+				why not simply
+
+				rannum = ( rand() % fill);
+				
+				That directly results in a random number in the allowed range. I'm using this now until someone convinces me of the numerical benefits of the other.
+			*/
+			rannum = (size_t) rand() % pl.fill;
 			/*
 				Small test on your binary operation skills (^ is XOR):
 				a = b^(a^b)
@@ -528,24 +455,17 @@ void shuffle_playlist()
 	{
 		/* print them */
 		fprintf(stderr, "\nshuffled playlist:\n");
-		print_playlist(stderr, 0);
+		print_playlist();
 		fprintf(stderr, "\n");
 	}
 }
 
-void print_playlist(FILE* out, int showpos)
+void print_playlist()
 {
 	size_t loop;
 	for (loop = 0; loop < pl.fill; loop++)
-	{
-		char *pre = "";
-		if(showpos)
-		pre = (pl.pos>0 && loop==pl.pos-1) ? "> " : "  ";
-
-		fprintf(out, "%s%s\n", pre, pl.list[loop].url);
-	}
+	fprintf(stderr, "%s\n", pl.list[loop].url);
 }
-
 
 int add_copy_to_playlist(char* new_entry)
 {
@@ -565,7 +485,7 @@ int add_to_playlist(char* new_entry, char freeit)
 	{
 		struct listitem* tmp = NULL;
 		/* enlarge the list */
-		tmp = (struct listitem*) safe_realloc(pl.list, (pl.size + pl.alloc_step) * sizeof(struct listitem));
+		tmp = (struct listitem*) realloc(pl.list, (pl.size + pl.alloc_step) * sizeof(struct listitem));
 		if(!tmp)
 		{
 			error("unable to allocate more memory for playlist");
@@ -583,7 +503,6 @@ int add_to_playlist(char* new_entry, char freeit)
 	{
 		pl.list[pl.fill].freeit = freeit;
 		pl.list[pl.fill].url = new_entry;
-		pl.list[pl.fill].playcount = 0;
 		++pl.fill;
 	}
 	else

@@ -1,39 +1,48 @@
 /*
 	xfermem: unidirectional fast pipe
 
-	copyright ?-2008 by the mpg123 project - free software under the terms of the LGPL 2.1
-	see COPYING and AUTHORS files in distribution or http://mpg123.org
+	copyright ?-2006 by the mpg123 project - free software under the terms of the LGPL 2.1
+	see COPYING and AUTHORS files in distribution or http://mpg123.de
 	initially written by Oliver Fromme
 	old timestamp: Sun Apr  6 02:26:26 MET DST 1997
 
 	See xfermem.h for documentation/description.
 */
 
+#include "config.h"
 
 #ifndef NOXFERMEM
 
-#include "mpg123app.h"
+#include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 #include <errno.h>
+#include <sys/types.h>
+#include <sys/time.h>
 #include <sys/uio.h>
 #include <sys/mman.h>
 #include <sys/socket.h>
 #include <fcntl.h>
+
+#ifdef AIX
+#include <sys/select.h>
+#endif
+
+#include "mpg123.h"
 
 #ifndef HAVE_MMAP
 #include <sys/ipc.h>
 #include <sys/shm.h>
 #endif
 
-#include "debug.h"
-
 #if defined (HAVE_MMAP) && defined(MAP_ANONYMOUS) && !defined(MAP_ANON)
 #define MAP_ANON MAP_ANONYMOUS
 #endif
 
-void xfermem_init (txfermem **xf, size_t bufsize, size_t msize, size_t skipbuf)
+void xfermem_init (txfermem **xf, int bufsize, int msize, int skipbuf)
 {
-	size_t regsize = bufsize + msize + skipbuf + sizeof(txfermem);
+	int regsize = bufsize + msize + skipbuf + sizeof(txfermem);
 
 #ifdef HAVE_MMAP
 #  ifdef MAP_ANON
@@ -84,7 +93,6 @@ void xfermem_init (txfermem **xf, size_t bufsize, size_t msize, size_t skipbuf)
 	(*xf)->metadata = ((byte *) *xf) + sizeof(txfermem);
 	(*xf)->size = bufsize;
 	(*xf)->metasize = msize + skipbuf;
-	(*xf)->justwait = 0;
 }
 
 void xfermem_done (txfermem *xf)
@@ -113,9 +121,9 @@ void xfermem_init_reader (txfermem *xf)
 		close (xf->fd[XF_WRITER]);
 }
 
-size_t xfermem_get_freespace (txfermem *xf)
+int xfermem_get_freespace (txfermem *xf)
 {
-	size_t freeindex, readindex;
+	int freeindex, readindex;
 
 	if(!xf)
 		return 0;
@@ -129,9 +137,9 @@ size_t xfermem_get_freespace (txfermem *xf)
 		return ((xf->size - (freeindex - readindex)) - 1);
 }
 
-size_t xfermem_get_usedspace (txfermem *xf)
+int xfermem_get_usedspace (txfermem *xf)
 {
-	size_t freeindex, readindex;
+	int freeindex, readindex;
 
 	if(!xf)
 		return 0;
@@ -216,66 +224,12 @@ int xfermem_block (int readwrite, txfermem *xf)
 	return ((result <= 0) ? -1 : result);
 }
 
-/* Parallel-safe code to signal a process and wait for it to respond. */
-int xfermem_sigblock(int readwrite, txfermem *xf, int pid, int signal)
-{
-	int myfd = xf->fd[readwrite];
-	int result;
-
-	xf->wakeme[readwrite] = TRUE;
-	kill(pid, signal);
-
-	/* not sure about that block... here */
-	if (xf->wakeme[1 - readwrite])
-		xfermem_putcmd (myfd, XF_CMD_WAKEUP);
-
-	result = xfermem_getcmd(myfd, TRUE);
-	xf->wakeme[readwrite] = FALSE;
-
-	return ((result <= 0) ? -1 : result);
-}
-
-int xfermem_write(txfermem *xf, byte *buffer, size_t bytes)
-{
-	if(buffer == NULL || bytes < 1) return FALSE;
-
-	/* You weren't so braindead to have not allocated enough space at all, right? */
-	while (xfermem_get_freespace(xf) < bytes)
-	{
-		int cmd =  xfermem_block(XF_WRITER, xf);
-		if (cmd == XF_CMD_TERMINATE || cmd < 0)
-		{
-			error("failed to wait for free space");
-			return TRUE; /* Failure. */
-		}
-	}
-	/* Now we have enough space. copy the memory, possibly with the wrap. */
-	if(xf->size - xf->freeindex >= bytes)
-	{	/* one block of free memory */
-		memcpy(xf->data+xf->freeindex, buffer, bytes);
-	}
-	else
-	{ /* two blocks */
-		size_t endblock = xf->size - xf->freeindex;
-		memcpy(xf->data+xf->freeindex, buffer, endblock);
-		memcpy(xf->data, buffer + endblock, bytes-endblock);
-	}
-	/* Advance the free space pointer, including the wrap. */
-	xf->freeindex = (xf->freeindex + bytes) % xf->size;
-	/* Wake up the buffer process if necessary. */
-	debug("write waking");
-	if(xf->wakeme[XF_READER])
-	return xfermem_putcmd(xf->fd[XF_WRITER], XF_CMD_WAKEUP_INFO) < 0 ? TRUE : FALSE;
-
-	return FALSE;
-}
-
 #else /* stubs for generic / win32 */
 
-#include "mpg123app.h"
+#include "mpg123.h"
 #include "xfermem.h"
 
-void xfermem_init (txfermem **xf, size_t bufsize, size_t msize, size_t skipbuf)
+void xfermem_init (txfermem **xf, int bufsize, int msize, int skipbuf)
 {
 }
 void xfermem_done (txfermem *xf)
@@ -287,17 +241,13 @@ void xfermem_init_writer (txfermem *xf)
 void xfermem_init_reader (txfermem *xf)
 {
 }
-size_t xfermem_get_freespace (txfermem *xf)
+int xfermem_get_freespace (txfermem *xf)
 {
   return 0;
 }
-size_t xfermem_get_usedspace (txfermem *xf)
+int xfermem_get_usedspace (txfermem *xf)
 {
   return 0;
-}
-int xfermem_write(txfermem *xf, byte *buffer, size_t bytes)
-{
-	return FALSE;
 }
 int xfermem_getcmd (int fd, int block)
 {
@@ -308,10 +258,6 @@ int xfermem_putcmd (int fd, byte cmd)
   return 0;
 }
 int xfermem_block (int readwrite, txfermem *xf)
-{
-  return 0;
-}
-int xfermem_sigblock (int readwrite, txfermem *xf, int pid, int signal)
 {
   return 0;
 }
