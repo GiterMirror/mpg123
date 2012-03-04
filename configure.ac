@@ -9,10 +9,10 @@ AC_PREREQ(2.57)
 
 
 dnl ############# Initialisation
-AC_INIT([mpg123], [1.14.0], [mpg123-devel@lists.sourceforge.net])
+AC_INIT([mpg123], [1.13.4], [mpg123-devel@lists.sourceforge.net])
 dnl Increment API_VERSION when the API gets changes (new functions).
-API_VERSION=34
-LIB_PATCHLEVEL=7
+API_VERSION=29
+LIB_PATCHLEVEL=6
 dnl Since we want to be backwards compatible, both sides get set to API_VERSION.
 LIBMPG123_VERSION=$API_VERSION:$LIB_PATCHLEVEL:$API_VERSION
 AC_SUBST(LIBMPG123_VERSION)
@@ -382,7 +382,7 @@ AC_ARG_ENABLE(messages,
 
 if test "x$messages" = "xdisabled"; then
   AC_DEFINE(NO_WARNING, 1, [ Define to disable warning messages. ])
-  AC_DEFINE(NO_ERRORMSG,   1, [ Define to disable error messages. ])
+  AC_DEFINE(NO_ERROR,   1, [ Define to disable error messages. ])
   AC_DEFINE(NO_ERETURN, 1, [ Define to disable error messages in combination with a return value (the return is left intact). ])
 fi
 
@@ -472,7 +472,7 @@ if test "x$ieee" = xyes; then
   AC_DEFINE(IEEE_FLOAT,   1, [ Define to indicate that float storage follows IEEE754. ])
 fi
 
-newoldwritesample=disabled
+
 case $host in
   arm*-*-linux*)
     # check that... perhaps we are better off on arm with kernel math emulation
@@ -480,19 +480,15 @@ case $host in
   ;;
   i386-*-linux*|i386-*-kfreebsd*-gnu)
     cpu_type="i386_fpu"
-    newoldwritesample=enabled
   ;;
   i486-*-linux*|i486-*-kfreebsd*-gnu)
     cpu_type="i486"
-    newoldwritesample=enabled
   ;;
   i586-*-linux*|i586-*-kfreebsd*-gnu)
     cpu_type="x86"
-    newoldwritesample=enabled
   ;;
   i686-*-linux*|i686-*-kfreebsd*-gnu)
     cpu_type="x86"
-    newoldwritesample=enabled
   ;;
   x86_64-*-linux*|x86_64-*-kfreebsd*-gnu)
     cpu_type="x86-64_all"
@@ -510,13 +506,11 @@ case $host in
       *)
         AC_MSG_RESULT([no])
         cpu_type="x86"
-        newoldwritesample=enabled
       ;;
     esac
   ;;
   i386-apple-darwin*)
     cpu_type="x86"
-    newoldwritesample=enabled
   ;;
   x86_64-apple-darwin*)
     cpu_type="x86-64_all"
@@ -536,7 +530,6 @@ case $host in
   ;;
   i?86-*-dragonfly* | i?86-*-freebsd* | i?86-*-midnightbsd* | i?86-*-mirbsd* | i?86-*-netbsd* | i?86-*-openbsd*)
     cpu_type="x86"
-    newoldwritesample=enabled
   ;;
   x86_64-*-dragonfly* | x86_64-*-freebsd* | x86_64-*-midnightbsd* | x86_64-*-mirbsd* | x86_64-*-netbsd* | x86_64-*-openbsd*)
     cpu_type="x86-64_all"
@@ -546,7 +539,6 @@ case $host in
   ;;
   i386-*-solaris*)
     cpu_type=x86
-    newoldwritesample=enabled
   ;;
   x86_64-*-solaris*)
     cpu_type=x86-64_all
@@ -558,7 +550,6 @@ case $host in
   # Till we sorted out the assembler troubles, generic CPU is default.
   i386-pc-os2-emx)
     cpu_type=generic_fpu
-    newoldwritesample=enabled
   ;;
   x86_64-pc-os2-emx)
     # We are optimistic hat the future knows OS/2 on x86-64;-)
@@ -575,19 +566,15 @@ case $host in
   ;;
   i686-pc-cygwin*)
     cpu_type="x86"
-    newoldwritesample=enabled
   ;;
   i586-pc-cygwin*)
     cpu_type="x86"
-    newoldwritesample=enabled
   ;;
   i486-pc-cygwin*)
     cpu_type="i486"
-    newoldwritesample=enabled
   ;;
   i386-pc-cygwin*)
     cpu_type="i386"
-    newoldwritesample=enabled
   ;;
   *-pc-cygwin*)
     cpu_type="generic_fpu"
@@ -596,7 +583,6 @@ case $host in
     LIBS="$LIBS"
     buffer=disabled
     cpu_type="x86"
-    newoldwritesample=enabled
   ;;
   x86_64-*-mingw32*)
     LIBS="$LIBS"
@@ -608,28 +594,24 @@ case $host in
 		cpu_type="i386"
 		buffer=disabled
 		ADD_CPPFLAGS="-DGENERIC $ADD_CPPFLAGS"
-    newoldwritesample=enabled
 	;;
 	i486-*)
 		AC_MSG_WARN([Unknown host operating system])
 		cpu_type="i486"
 		buffer=disabled
 		ADD_CPPFLAGS="-DGENERIC $ADD_CPPFLAGS"
-    newoldwritesample=enabled
 	;;
 	i586-*)
 		AC_MSG_WARN([Unknown host operating system])
 		cpu_type="x86"
 		buffer=disabled
 		ADD_CPPFLAGS="-DGENERIC $ADD_CPPFLAGS"
-    newoldwritesample=enabled
 	;;
 	i686-*)
 		AC_MSG_WARN([Unknown host operating system])
 		cpu_type="x86"
 		buffer=disabled
 		ADD_CPPFLAGS="-DGENERIC $ADD_CPPFLAGS"
-    newoldwritesample=enabled
 	;;
 	x86_64-*)
 		AC_MSG_WARN([Unknown host operating system])
@@ -658,19 +640,6 @@ AC_ARG_ENABLE(buffer,
     fi
   ]
 )
-
-AC_ARG_ENABLE(newoldwritesample,
-[  --enable-newoldwritesample=[no/yes] enable new/old WRITE_SAMPLE macro for non-accurate 16 bit output, faster on certain CPUs (default on on x86-32)],
-[
-	if test "x$enableval" = xyes
-	then
-		newoldwritesample=enabled
-	else
-		newoldwritesample=disabled
-	fi
-])
-
-
 
 dnl Did user choose other CPU type ?
 if test "x$with_cpu" != "x"; then
@@ -981,6 +950,20 @@ AC_CHECK_FUNCS( atoll )
 
 AC_CHECK_FUNCS( mkfifo, [ have_mkfifo=yes ], [ have_mkfifo=no ] )
 
+if test x"$fifo" = xauto; then
+	if test x"$have_mkfifo" = xyes; then
+		fifo=enabled
+	else
+		fifo=disabled
+	fi
+fi
+if test x"$fifo" = xenabled; then
+	AC_DEFINE(FIFO, 1, [ Define if FIFO support is enabled. ])
+	if test x"$have_mkfifo" = xno; then
+		AC_MSG_WARN( [ You forced FIFO code while I think there is no mkfifo() available! ] )
+	fi
+fi
+
 dnl ############## Header and Library Checks
 
 # locale headers
@@ -1071,7 +1054,7 @@ dnl Only try the attribute_align_arg mumbo-jumbo on x86, x86-64 warns/errors out
 dnl ...dunno even what about other architectures.
 case $host in
   i?86-*)
-    AC_DEFINE(ABI_ALIGN_FUN, 1, [ Define if your architecture wants/needs/can use attribute_align_arg and alignment checks. It is for 32bit x86... ])
+    AC_DEFINE(ABI_ALIGN_FUN, 1, [ Define if your architecture wants/needs/can use attribute_align_arg and alignment checks. It's for 32bit x86... ])
  ;;
 esac
 
@@ -1131,7 +1114,7 @@ dnl Not disabling buffer for float mode... check that this is OK now!
     ccalign=no
   ;;
   ppc_nofpu)
-    ADD_CPPFLAGS="$ADD_CPPFLAGS -DOPT_PPC -DREAL_IS_FIXED"
+    ADD_CPPFLAGS="$ADD_CPPFLAGS -DOPT_GENERIC -DOPT_PPC -DREAL_IS_FIXED"
     more_sources=
     ccalign=no
   ;;
@@ -1808,9 +1791,6 @@ CFLAGS="$ADD_CFLAGS $CFLAGS"
 if test x"$buffer" = xdisabled; then
 	ADD_CPPFLAGS="$ADD_CPPFLAGS -DNOXFERMEM"
 fi
-if test x"$newoldwritesample" = xenabled; then
-	ADD_CPPFLAGS="$ADD_CPPFLAGS -DNEWOLD_WRITE_SAMPLE"
-fi
 CPPFLAGS="$ADD_CPPFLAGS $CPPFLAGS"
 LDFLAGS="$ADD_LDFLAGS $LDFLAGS"
 
@@ -1972,47 +1952,10 @@ if test "x$win32_specific_codes" = xenabled && test "x$host_os" != "xcygwin"; th
   else
     AC_MSG_RESULT([no])
   fi
-
-#### Check for Win32 Named Pipe functions
-win32_fifo_working=no
-if test x$win32_specific_codes = xenabled; then
-  AC_MSG_CHECKING([if we have Named Pipes])
-  if test "x$fifo" != "xdisabled"; then
-    AC_LINK_IFELSE([AC_LANG_SOURCE([
-    #include <windows.h>
-      int main(){
-        CreateNamedPipeA(NULL,PIPE_ACCESS_DUPLEX|FILE_FLAG_OVERLAPPED,PIPE_TYPE_BYTE,1,255,255,0,NULL);
-        CreateNamedPipeW(NULL,PIPE_ACCESS_DUPLEX|FILE_FLAG_OVERLAPPED,PIPE_TYPE_BYTE,1,255,255,0,NULL);
-        return 0;
-      }])],[win32_fifo_working=yes],[win32_winver_bump=yes])
-    if test "x$win32_fifo_working" != "xyes"; then
-    AC_LINK_IFELSE([AC_LANG_SOURCE([
-    #define WINVER 0x501
-    #define _WIN32_WINNT 0x501
-    #include <windows.h>
-      int main(){
-        CreateNamedPipeA(NULL,PIPE_ACCESS_DUPLEX|FILE_FLAG_OVERLAPPED,PIPE_TYPE_BYTE,1,255,255,0,NULL);
-        CreateNamedPipeW(NULL,PIPE_ACCESS_DUPLEX|FILE_FLAG_OVERLAPPED,PIPE_TYPE_BYTE,1,255,255,0,NULL);
-        return 0;
-      }])],[win32_fifo_working=yes],[win32_fifo_working=no])
-    fi
-  fi
-  have_mkfifo=$win32_fifo_working
-  if test "x$win32_fifo_working" = "xyes"; then
-    AC_MSG_RESULT([yes])
-    AC_DEFINE([WANT_WIN32_FIFO], [1], [ Define to use Win32 named pipes ])
-  else
-    AC_MSG_RESULT([no])
-  fi
-fi
-
-#### WINVER Bump
-if test x$win32_specific_codes = xenabled; then
   AC_MSG_CHECKING([if WINVER and _WIN32_WINNT needs version bumps])
   if test "x$win32_winver_bump" = "xyes"; then
     AC_MSG_RESULT([yes])
-    AC_DEFINE([WINVER], [0x0501], [ WinXP and above for ipv6 ])
-    AC_DEFINE([_WIN32_WINNT], [0x0501], [ WinXP and above for ipv6 ])
+    CFLAGS="$CFLAGS -DWINVER=0x0501 -D_WIN32_WINNT=0x0501"
     # getaddrinfo and freeaddrinfo are available for Win2K and above
     # Bug: MinGW.org w32api ws2tcpip.h incorrectly wants (_WIN32_WINNT >= 0x0501) for getaddrinfo and freeaddrinfo
     # MultiByteToWideChar and WideCharToMultiByte are available for Win2K and above
@@ -2020,8 +1963,6 @@ if test x$win32_specific_codes = xenabled; then
     AC_MSG_RESULT([no])
   fi
 fi
-
-fi #END OF WIN32 CHECKS
 
 #### Use Win32 support codes
 AM_CONDITIONAL([WIN32_CODES], [ test "x$win32_specific_codes" = xenabled ])
@@ -2038,23 +1979,6 @@ if test x"$ipv6" = xauto; then
 		ipv6=enabled
 	else
 		ipv6=disabled
-	fi
-fi
-
-dnl ############## FIFO enable
-
-if test x"$fifo" = xauto; then
-	if test x"$have_mkfifo" = xyes; then
-		fifo=enabled
-	else
-		fifo=disabled
-	fi
-fi
-
-if test x"$fifo" = xenabled; then
-	AC_DEFINE(FIFO, 1, [ Define if FIFO support is enabled. ])
-	if test x"$have_mkfifo" = xno; then
-		AC_MSG_WARN( [ You forced FIFO code while I think there is no mkfifo() available! ] )
 	fi
 fi
 
@@ -2131,7 +2055,6 @@ fi
 echo -n "
   Core libmpg123 features:
   Integer conversion ...... $integers
-  New/old WRITE_SAMPLE .... $newoldwritesample
   Layer I ................. $layer1
   Layer II ................ $layer2
   Layer III ............... $layer3
@@ -2149,8 +2072,6 @@ echo -n "
   16 bit integer .......... $int16
   32/24 bit integer ....... $int32
   real (32 bit float) ..... $real
-
-Note: Disabling core features is not commonly done and some combinations might not build/work. If you encounter such a case, help yourself (and provide a patch) or just poke the maintainers.
 "
 # just an empty line
 echo
