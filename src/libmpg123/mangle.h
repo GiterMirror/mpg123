@@ -19,10 +19,6 @@
 #define MOVUAPS movups
 #endif
 
-/*
-	ALIGNX: align to X bytes
-	This differs per compiler/platform in taking the byte count or an exponent for base 2.
-*/
 #ifdef ASMALIGN_EXP
 #define ALIGN4  .align 2
 #define ALIGN8  .align 3

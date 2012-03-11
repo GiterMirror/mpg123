@@ -254,7 +254,7 @@
 /* #undef NO_ERETURN */
 
 /* Define to disable error messages. */
-/* #undef NO_ERRORMSG */
+/* #undef NO_ERROR */
 
 /* Define to disable feeder and buffered readers. */
 /* #undef NO_FEEDER */
