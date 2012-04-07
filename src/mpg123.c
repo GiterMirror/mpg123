@@ -66,8 +66,6 @@ struct parameter param = {
   0,      /* destination (headphones, ...) */
 #ifdef HAVE_TERMIOS
   FALSE , /* term control */
-  MPG123_TERM_USR1,
-  MPG123_TERM_USR2,
 #endif
   FALSE , /* checkrange */
   0 ,	  /* force_reopen, always (re)opens audio device for next song */
@@ -104,7 +102,7 @@ struct parameter param = {
 	,1024 /* resync_limit */
 	,0 /* smooth */
 	,0.0 /* pitch */
-	,0 /* appflags */
+	,0 /* ignore_mime */
 	,NULL /* proxyurl */
 	,0 /* keep_open */
 	,0 /* force_utf8 */
@@ -197,10 +195,10 @@ void safe_exit(int code)
 
 	httpdata_free(&htd);
 
-#ifdef WANT_WIN32_UNICODE
+#ifdef WIN32_WANT_UNICODE
 	win32_cmdline_free(argc, argv); /* This handles the premature argv == NULL, too. */
 #endif
-#if defined (WANT_WIN32_UNICODE)
+#if defined (WANT_WIN32_SOCKETS)
 	win32_net_deinit();
 #endif
 	/* It's ugly... but let's just fix this still-reachable memory chunk of static char*. */
@@ -297,20 +295,10 @@ static void set_out_file(char *arg)
 {
 	param.outmode=DECODE_FILE;
 	#ifdef WIN32
-	#ifdef WANT_WIN32_UNICODE
-	wchar_t *argw = NULL;
-	OutputDescriptor = win32_utf8_wide(arg, &argw, NULL);
-	if(argw != NULL)
-	{
-		OutputDescriptor=_wopen(argw,_O_CREAT|_O_WRONLY|_O_BINARY|_O_TRUNC,0666);
-		free(argw);
-	}
-	#else
 	OutputDescriptor=_open(arg,_O_CREAT|_O_WRONLY|_O_BINARY|_O_TRUNC,0666);
-	#endif /*WANT_WIN32_UNICODE*/
-	#else /*WIN32*/
+	#else
 	OutputDescriptor=open(arg,O_CREAT|O_WRONLY|O_TRUNC,0666);
-	#endif /*WIN32*/
+	#endif
 	if(OutputDescriptor==-1)
 	{
 		error2("Can't open %s for writing (%s).\n",arg,strerror(errno));
@@ -356,17 +344,6 @@ static void unset_frameflag(char *arg)
 {
 	param.flags &= ~frameflag;
 }
-
-static int appflag; /* still ugly, but works */
-static void set_appflag(char *arg)
-{
-	param.appflags |= appflag;
-}
-/* static void unset_appflag(char *arg)
-{
-	param.appflags &= ~appflag;
-} */
-
 /* Please note: GLO_NUM expects point to LONG! */
 /* ThOr:
  *  Yeah, and despite that numerous addresses to int variables were 
@@ -415,8 +392,6 @@ topt opts[] = {
 	{'n', "frames",      GLO_ARG | GLO_LONG, 0, &param.frame_number,  0},
 	#ifdef HAVE_TERMIOS
 	{'C', "control",     GLO_INT,  0, &param.term_ctrl, TRUE},
-	{0,   "ctrlusr1",    GLO_ARG | GLO_CHAR, 0, &param.term_usr1, 0},
-	{0,   "ctrlusr2",    GLO_ARG | GLO_CHAR, 0, &param.term_usr2, 0},
 	#endif
 #ifndef NOXFERMEM
 	{'b', "buffer",      GLO_ARG | GLO_LONG, 0, &param.usebuffer,  0},
@@ -482,8 +457,7 @@ topt opts[] = {
 	{'D', "delay", GLO_ARG | GLO_INT, 0, &param.delay, 0},
 	{0, "resync-limit", GLO_ARG | GLO_LONG, 0, &param.resync_limit, 0},
 	{0, "pitch", GLO_ARG|GLO_DOUBLE, 0, &param.pitch, 0},
-	{0, "ignore-mime", GLO_INT, set_appflag, &appflag, MPG123APP_IGNORE_MIME },
-	{0, "lyrics", GLO_INT, set_appflag, &appflag, MPG123APP_LYRICS},
+	{0, "ignore-mime", GLO_INT,  0, &param.ignore_mime, 1 },
 	{0, "keep-open", GLO_INT, 0, &param.keep_open, 1},
 	{0, "utf8", GLO_INT, 0, &param.force_utf8, 1},
 	{0, "fuzzy", GLO_INT,  set_frameflag, &frameflag, MPG123_FUZZY},
@@ -495,7 +469,6 @@ topt opts[] = {
 	{0, "skip-id3v2", GLO_INT, set_frameflag, &frameflag, MPG123_SKIP_ID3V2},
 	{0, "streamdump", GLO_ARG|GLO_CHAR, 0, &param.streamdump, 0},
 	{0, "icy-interval", GLO_ARG|GLO_LONG, 0, &param.icy_interval, 0},
-	{0, "ignore-streamlength", GLO_INT, set_frameflag, &frameflag, MPG123_IGNORE_STREAMLENGTH},
 	{0, 0, 0, 0, 0, 0}
 };
 
@@ -595,7 +568,7 @@ int open_track(char *fname)
 		
 		/* now check if we got sth. and if we got sth. good */
 		if(    (filept >= 0) && (htd.content_type.p != NULL)
-			  && !APPFLAG(MPG123APP_IGNORE_MIME) && !(debunk_mime(htd.content_type.p) & IS_FILE) )
+			  && !param.ignore_mime && !(debunk_mime(htd.content_type.p) & IS_FILE) )
 		{
 			error1("Unknown mpeg MIME type %s - is it perhaps a playlist (use -@)?", htd.content_type.p == NULL ? "<nil>" : htd.content_type.p);
 			error("If you know the stream is mpeg1/2 audio, then please report this as "PACKAGE_NAME" bug");
@@ -666,6 +639,11 @@ int play_frame(void)
 		if(fresh && framenum >= param.start_frame)
 		{
 			fresh = FALSE;
+			if(!param.quiet)
+			{
+				if(param.verbose) print_header(mh);
+				else print_header_compact(mh);
+			}
 		}
 		/* Normal flushing of data, includes buffer decoding. */
 		if(flush_output(ao, audio, bytes) < (int)bytes && !intflag)
@@ -697,14 +675,8 @@ int play_frame(void)
 			long rate;
 			int channels, format;
 			mpg123_getformat(mh, &rate, &channels, &format);
-			if(param.verbose > 2) fprintf(stderr, "\nNote: New output format %liHz %ich, format %i\n", rate, channels, format);
+			if(param.verbose > 2) fprintf(stderr, "Note: New output format %liHz %ich, format %i\n", rate, channels, format);
 
-			if(!param.quiet)
-			{
-				fprintf(stderr, "\n");
-				if(param.verbose) print_header(mh);
-				else print_header_compact(mh);
-			}
 			reset_audio(rate, channels, format);
 		}
 	}
@@ -990,9 +962,8 @@ int main(int sys_argc, char ** sys_argv)
 	}
 #endif
 
-#if defined (HAVE_SCHED_SETSCHEDULER) && !defined (__CYGWIN__) && !defined (HAVE_WINDOWS_H)
+#if defined (HAVE_SCHED_SETSCHEDULER) && !defined (__CYGWIN__)
 /* Cygwin --realtime seems to fail when accessing network, using win32 set priority instead */
-/* MinGW may have pthread installed, we prefer win32API */
 	if (param.realtime) {  /* Get real-time priority */
 	  struct sched_param sp;
 	  fprintf(stderr,"Getting real-time priority\n");
@@ -1145,8 +1116,6 @@ int main(int sys_argc, char ** sys_argv)
 				{
 					if(meta & MPG123_NEW_ID3) print_id3_tag(mh, param.long_id3, stderr);
 					if(meta & MPG123_NEW_ICY) print_icy(mh, stderr);
-
-					mpg123_meta_free(mh); /* Do not waste memory after delivering. */
 				}
 			}
 			if(!fresh && param.verbose)
@@ -1170,13 +1139,8 @@ int main(int sys_argc, char ** sys_argv)
 	if(!param.quiet)
 	{
 		double secs;
-		long frank;
-		fprintf(stderr, "\n");
-		if(mpg123_getstate(mh, MPG123_FRANKENSTEIN, &frank, NULL) == MPG123_OK && frank)
-		fprintf(stderr, "This was a Frankenstein track.\n");
-
 		mpg123_position(mh, 0, 0, NULL, NULL, &secs, NULL);
-		fprintf(stderr,"[%d:%02d] Decoding of %s finished.\n", (int)(secs / 60), ((int)secs) % 60, filename);
+		fprintf(stderr,"\n[%d:%02d] Decoding of %s finished.\n", (int)(secs / 60), ((int)secs) % 60, filename);
 	}
 	else if(param.verbose) fprintf(stderr, "\n");
 
@@ -1296,7 +1260,6 @@ static void long_usage(int err)
 	fprintf(o,"        --resync-limit <n> Set number of bytes to search for valid MPEG data; <0 means search whole stream.\n");
 	fprintf(o,"        --streamdump <f>   Dump a copy of input data (as read by libmpg123) to given file.\n");
 	fprintf(o,"        --icy-interval <n> Enforce ICY interval in bytes (for playing a stream dump.\n");
-	fprintf(o,"        --ignore-streamlength Ignore header info about length of MPEG streams.");
 	fprintf(o,"\noutput/processing options\n\n");
 	fprintf(o," -o <o> --output <o>       select audio output module\n");
 	fprintf(o,"        --list-modules     list the available modules\n");
@@ -1309,7 +1272,7 @@ static void long_usage(int err)
 	fprintf(o,"        --reopen           force close/open on audiodevice\n");
 	#ifdef OPT_MULTI
 	fprintf(o,"        --cpu <string>     set cpu optimization\n");
-	fprintf(o,"        --test-cpu         list optimizations possible with cpu and exit\n");
+	fprintf(o,"        --test-cpu         list optmizations possible with cpu and exit\n");
 	fprintf(o,"        --list-cpu         list builtin optimizations and exit\n");
 	#endif
 	#ifdef OPT_3DNOW
@@ -1358,16 +1321,11 @@ static void long_usage(int err)
 	fprintf(o," -q     --quiet            quiet mode\n");
 	#ifdef HAVE_TERMIOS
 	fprintf(o," -C     --control          enable terminal control keys\n");
-	fprintf(o,"        --ctrlusr1 <c>     control key (characer) to map to SIGUSR1\n");
-	fprintf(o,"                           (default is for stop/start)\n");
-	fprintf(o,"        --ctrlusr2 <c>     control key (characer) to map to SIGUSR2\n");
-	fprintf(o,"                           (default is for next track)\n");
 	#endif
 	#ifndef GENERIC
 	fprintf(o,"        --title            set xterm/rxvt title to filename\n");
 	#endif
 	fprintf(o,"        --long-tag         spacy id3 display with every item on a separate line\n");
-	fprintf(o,"        --lyrics           show lyrics (from ID3v2 USLT frame)\n");
 	fprintf(o,"        --utf8             Regardless of environment, print metadata in UTF-8.\n");
 	fprintf(o," -R     --remote           generic remote interface\n");
 	fprintf(o,"        --remote-err       force use of stderr for generic remote interface\n");

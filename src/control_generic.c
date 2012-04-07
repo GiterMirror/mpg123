@@ -9,7 +9,6 @@
 
 #include "mpg123app.h"
 #include <stdarg.h>
-#include <ctype.h>
 #if !defined (WIN32) || defined (__CYGWIN__)
 #include <sys/wait.h>
 #include <sys/socket.h>
@@ -21,7 +20,6 @@
 #include "common.h"
 #include "buffer.h"
 #include "genre.h"
-#include "playlist.h"
 #define MODE_STOPPED 0
 #define MODE_PLAYING 1
 #define MODE_PAUSED 2
@@ -34,9 +32,6 @@ extern audio_output_t *ao;
 int control_file = STDIN_FILENO;
 #else
 #define control_file STDIN_FILENO
-#ifdef WANT_WIN32_FIFO
-#error Control interface does not work on win32 stdin
-#endif /* WANT_WIN32_FIFO */
 #endif
 FILE *outstream;
 static int mode = MODE_STOPPED;
@@ -231,11 +226,7 @@ static void generic_load(mpg123_handle *fr, char *arg, int state)
 		return;
 	}
 	mpg123_seek(fr, 0, SEEK_SET); /* This finds ID3v2 at beginning. */
-	if(mpg123_meta_check(fr) & MPG123_NEW_ID3)
-	{
-		generic_sendinfoid3(fr);
-		mpg123_meta_free(fr);
-	}
+	if(mpg123_meta_check(fr) & MPG123_NEW_ID3) generic_sendinfoid3(fr);
 	else generic_sendinfo(arg);
 
 	if(htd.icy_name.fill) generic_sendmsg("I ICY-NAME: %s", htd.icy_name.p);
@@ -244,45 +235,6 @@ static void generic_load(mpg123_handle *fr, char *arg, int state)
 	mode = state;
 	init = 1;
 	generic_sendmsg(mode == MODE_PAUSED ? "P 1" : "P 2");
-}
-
-static void generic_loadlist(mpg123_handle *fr, char *arg)
-{
-	/* arguments are two: first the index to play, then the URL */
-	long entry;
-	long i = 0;
-	char *file = NULL;
-	char *thefile = NULL;
-
-	/* I feel retarted with string parsing outside Perl. */
-	while(*arg && isspace(*arg)) ++arg;
-	entry = atol(arg);
-	while(*arg && !isspace(*arg)) ++arg;
-	while(*arg && isspace(*arg)) ++arg;
-	if(!*arg)
-	{
-		generic_sendmsg("E empty list name");
-		return;
-	}
-
-	/* Now got the plain playlist path in arg. On to evil manupulation of mpg123's playlist code. */
-	param.listname = arg;
-	param.listentry = 0; /* The playlist shall not filter. */
-	prepare_playlist(0, NULL);
-	while((file = get_next_file()))
-	{
-		++i;
-		/* semantics: 0 brings you to the last track */
-		if(entry == 0 || entry == i) thefile = file;
-
-		generic_sendmsg("I LISTENTRY %li: %s", i, file);
-	}
-	if(!i) generic_sendmsg("I LIST EMPTY");
-
-	/* If we have something to play, play it. */
-	if(thefile) generic_load(fr, thefile, MODE_PLAYING);
-
-	free_playlist(); /* Free memory after it is not needed anymore. */
 }
 
 int control_generic (mpg123_handle *fr)
@@ -304,15 +256,13 @@ int control_generic (mpg123_handle *fr)
 #ifndef WIN32
  	setlinebuf(outstream);
 #else /* perhaps just use setvbuf as it's C89 */
-	/*
 	fprintf(outstream, "You are on Win32 and want to use the control interface... tough luck: We need a replacement for select on STDIN first.\n");
 	return 0;
 	setvbuf(outstream, (char*)NULL, _IOLBF, 0);
-	*/
 #endif
 	/* the command behaviour is different, so is the ID */
 	/* now also with version for command availability */
-	fprintf(outstream, "@R MPG123 (ThOr) v7\n");
+	fprintf(outstream, "@R MPG123 (ThOr) v6\n");
 #ifdef FIFO
 	if(param.fifo)
 	{
@@ -321,7 +271,6 @@ int control_generic (mpg123_handle *fr)
 			error("You wanted an empty FIFO name??");
 			return 1;
 		}
-#ifndef WANT_WIN32_FIFO
 		unlink(param.fifo);
 		if(mkfifo(param.fifo, 0666) == -1)
 		{
@@ -329,12 +278,7 @@ int control_generic (mpg123_handle *fr)
 			return 1;
 		}
 		debug("going to open named pipe ... blocking until someone gives command");
-#endif /* WANT_WIN32_FIFO */
-#ifdef WANT_WIN32_FIFO
-		control_file = win32_fifo_mkfifo(param.fifo);
-#else
 		control_file = open(param.fifo,O_RDONLY);
-#endif /* WANT_WIN32_FIFO */
 		debug("opened");
 	}
 #endif
@@ -347,11 +291,7 @@ int control_generic (mpg123_handle *fr)
 		FD_SET(control_file, &fds);
 		/* play frame if no command needs to be processed */
 		if (mode == MODE_PLAYING) {
-#ifdef WANT_WIN32_FIFO
-			n = win32_fifo_read_peek(&tv);
-#else
 			n = select(32, &fds, NULL, NULL, &tv);
-#endif
 			if (n == 0) {
 				if (!play_frame())
 				{
@@ -391,11 +331,7 @@ int control_generic (mpg123_handle *fr)
 		else {
 			/* wait for command */
 			while (1) {
-#ifdef WANT_WIN32_FIFO
-				n = win32_fifo_read_peek(NULL);
-#else
 				n = select(32, &fds, NULL, NULL, NULL);
-#endif
 				if (n > 0)
 					break;
 			}
@@ -419,23 +355,14 @@ int control_generic (mpg123_handle *fr)
 
 			/* read as much as possible, maybe multiple commands */
 			/* When there is nothing to read (EOF) or even an error, it is the end */
-#ifdef WANT_WIN32_FIFO
-			len = win32_fifo_read(buf,REMOTE_BUFFER_SIZE);
-#else
-			len = read(control_file, buf, REMOTE_BUFFER_SIZE);
-#endif
-			if(len < 1)
+			if((len = read(control_file, buf, REMOTE_BUFFER_SIZE)) < 1)
 			{
 #ifdef FIFO
 				if(len == 0 && param.fifo)
 				{
 					debug("fifo ended... reopening");
-#ifdef WANT_WIN32_FIFO
-					win32_fifo_mkfifo(param.fifo);
-#else
 					close(control_file);
 					control_file = open(param.fifo,O_RDONLY|O_NONBLOCK);
-#endif
 					if(control_file < 0){ error1("open of fifo failed... %s", strerror(errno)); break; }
 					continue;
 				}
@@ -569,14 +496,13 @@ int control_generic (mpg123_handle *fr)
 					generic_sendmsg("H HELP/H: command listing (LONG/SHORT forms), command case insensitve");
 					generic_sendmsg("H LOAD/L <trackname>: load and start playing resource <trackname>");
 					generic_sendmsg("H LOADPAUSED/LP <trackname>: load but do not start playing resource <trackname>");
-					generic_sendmsg("H LOADLIST <entry> <url>: load a playlist from given <url>, and display its entries, optionally load and play one of these specificed by the integer <entry> (<0: just list, 0: play last track, >0:play track with that position in list)");
 					generic_sendmsg("H PAUSE/P: pause playback");
 					generic_sendmsg("H STOP/S: stop playback (closes file)");
 					generic_sendmsg("H JUMP/J <frame>|<+offset>|<-offset>|<[+|-]seconds>s: jump to mpeg frame <frame> or change position by offset, same in seconds if number followed by \"s\"");
 					generic_sendmsg("H VOLUME/V <percent>: set volume in % (0..100...); float value");
 					generic_sendmsg("H RVA off|(mix|radio)|(album|audiophile): set rva mode");
 					generic_sendmsg("H EQ/E <channel> <band> <value>: set equalizer value for frequency band 0 to 31 on channel %i (left) or %i (right) or %i (both)", MPG123_LEFT, MPG123_RIGHT, MPG123_LR);
-					generic_sendmsg("H EQFILE <filename>: load EQ settings from a file");
+					 generic_sendmsg("H EQFILE <filename>: load EQ settings from a file");
 					generic_sendmsg("H SHOWEQ: show all equalizer settings (as <channel> <band> <value> lines in a SHOWEQ block (like TAG))");
 					generic_sendmsg("H SEEK/K <sample>|<+offset>|<-offset>: jump to output sample position <samples> or change position by offset");
 					generic_sendmsg("H SCAN: scan through the file, building seek index");
@@ -584,7 +510,7 @@ int control_generic (mpg123_handle *fr)
 					generic_sendmsg("H SEQ <bass> <mid> <treble>: simple eq setting...");
 					generic_sendmsg("H PITCH <[+|-]value>: adjust playback speed (+0.01 is 1 %% faster)");
 					generic_sendmsg("H SILENCE: be silent during playback (meaning silence in text form)");
-					generic_sendmsg("H STATE: Print auxiliary state info in several lines (just try it to see what info is there).");
+					generic_sendmsg("H STATE: Print auxilliary state info in several lines (just try it to see what info is there).");
 					generic_sendmsg("H TAG/T: Print all available (ID3) tag info, for ID3v2 that gives output of all collected text fields, using the ID3v2.3/4 4-character names.");
 					generic_sendmsg("H    The output is multiple lines, begin marked by \"@T {\", end by \"@T }\".");
 					generic_sendmsg("H    ID3v1 data is like in the @I info lines (see below), just with \"@T\" in front.");
@@ -753,8 +679,6 @@ int control_generic (mpg123_handle *fr)
 					/* LOAD - actually play */
 					if (!strcasecmp(cmd, "L") || !strcasecmp(cmd, "LOAD")){ generic_load(fr, arg, MODE_PLAYING); continue; }
 
-					if (!strcasecmp(cmd, "L") || !strcasecmp(cmd, "LOADLIST")){ generic_loadlist(fr, arg); continue; }
-
 					/* LOADPAUSED */
 					if (!strcasecmp(cmd, "LP") || !strcasecmp(cmd, "LOADPAUSED")){ generic_load(fr, arg, MODE_PAUSED); continue; }
 
@@ -795,12 +719,8 @@ int control_generic (mpg123_handle *fr)
 #endif
 	debug("closing control");
 #ifdef FIFO
-#if WANT_WIN32_FIFO
-	win32_fifo_close();
-#else
 	close(control_file); /* be it FIFO or STDIN */
 	if(param.fifo) unlink(param.fifo);
-#endif /* WANT_WIN32_FIFO */
 #endif
 	debug("control_generic returning");
 	return 0;

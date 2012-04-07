@@ -79,10 +79,10 @@ struct III_sideinfo
 
 struct bandInfoStruct
 {
-	unsigned short longIdx[23];
-	unsigned char longDiff[22];
-	unsigned short shortIdx[14];
-	unsigned char shortDiff[13];
+	int longIdx[23];
+	int longDiff[22];
+	int shortIdx[14];
+	int shortDiff[13];
 };
 
 /* Techy details about our friendly MPEG data. Fairly constant over the years;-) */
@@ -270,7 +270,7 @@ void init_layer3(void)
 		const struct bandInfoStruct *bi = &bandInfo[j];
 		int *mp;
 		int cb,lwin;
-		const unsigned char *bdf;
+		const int *bdf;
 
 		mp = map[j][0] = mapbuf0[j];
 		bdf = bi->longDiff;
@@ -403,7 +403,7 @@ static int III_get_side_info(mpg123_handle *fr, struct III_sideinfo *si,int ster
 
 	if(si->main_data_begin > fr->bitreservoir)
 	{
-		if(!fr->to_ignore && VERBOSE2) fprintf(stderr, "Note: missing %d bytes in bit reservoir for frame %li\n", (int)(si->main_data_begin - fr->bitreservoir), (long)fr->num);
+		if(VERBOSE2) fprintf(stderr, "Note: missing %d bytes in bit reservoir for frame %li\n", (int)(si->main_data_begin - fr->bitreservoir), (long)fr->num);
 
 		/*  overwrite main_data_begin for the really available bit reservoir */
 		backbits(fr, tab[1]);
@@ -494,7 +494,6 @@ static int III_get_side_info(mpg123_handle *fr, struct III_sideinfo *si,int ster
 					if((gr_info->block_type == 2) && (!gr_info->mixed_block_flag) ) r0c = 5;
 					else r0c = 7;
 
-					/* r0c+1+r1c+1 == 22, always. */
 					r1c = 20 - r0c;
 					gr_info->region1start = bandInfo[sfreq].longIdx[r0c+1] >> 1 ;
 					gr_info->region2start = bandInfo[sfreq].longIdx[r0c+1+r1c+1] >> 1; 
@@ -512,12 +511,12 @@ static int III_get_side_info(mpg123_handle *fr, struct III_sideinfo *si,int ster
 			for (i=0; i<3; i++)
 			gr_info->table_select[i] = getbits_fast(fr, 5);
 
-			r0c = getbits_fast(fr, 4); /* 0 .. 15 */
-			r1c = getbits_fast(fr, 3); /* 0 .. 7 */
+			r0c = getbits_fast(fr, 4);
+			r1c = getbits_fast(fr, 3);
 			gr_info->region1start = bandInfo[sfreq].longIdx[r0c+1] >> 1 ;
+			gr_info->region2start = bandInfo[sfreq].longIdx[r0c+1+r1c+1] >> 1;
 
-			/* max(r0c+r1c+2) = 15+7+2 = 24 */
-			if(r0c+1+r1c+1 > 22) gr_info->region2start = 576>>1;
+			if(r0c + r1c + 2 > 22) gr_info->region2start = 576>>1;
 			else gr_info->region2start = bandInfo[sfreq].longIdx[r0c+1+r1c+1] >> 1;
 
 			gr_info->block_type = 0;
@@ -678,11 +677,8 @@ static int III_get_scale_factors_2(mpg123_handle *fr, int *scf,struct gr_info_s 
 	return numbits;
 }
 
-static unsigned char pretab_choice[2][22] =
-{
-	{0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
-	{0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,2,2,3,3,3,2,0}
-};
+static const int pretab1[22] = {0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,2,2,3,3,3,2,0};
+static const int pretab2[22] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
 
 /*
 	Dequantize samples
@@ -720,6 +716,16 @@ static int III_dequantize_sample(mpg123_handle *fr, real xr[SBLIMIT][SSLIMIT],in
 		int bv       = gr_info->big_values;
 		int region1  = gr_info->region1start;
 		int region2  = gr_info->region2start;
+		if(region1 > region2)
+		{
+			/*
+				That's not optimal: it fixes a segfault with fuzzed data, but also apparently triggers where it shouldn't, see bug 1641196.
+				The benefit of not crashing / having this security risk is bigger than these few frames of a lame-3.70 file that aren't audible anyway.
+				But still, I want to know if indeed this check or the old lame is at fault.
+			*/
+			if(NOQUIET) error("You got some really nasty file there... region1>region2!");
+			return 1;
+		}
 		l3 = ((576>>1)-bv)>>1;   
 
 		/* we may lose the 'odd' bit here !! check this later again */
@@ -772,7 +778,7 @@ static int III_dequantize_sample(mpg123_handle *fr, real xr[SBLIMIT][SSLIMIT],in
 		for(i=0;i<2;i++)
 		{
 			int lp = l[i];
-			const struct newhuff *h = ht+gr_info->table_select[i];
+			struct newhuff *h = ht+gr_info->table_select[i];
 			for(;lp;lp--,mc--)
 			{
 				register int x,y;
@@ -800,7 +806,7 @@ static int III_dequantize_sample(mpg123_handle *fr, real xr[SBLIMIT][SSLIMIT],in
 					}
 				}
 				{
-					const short *val = h->table;
+					register short *val = h->table;
 					REFRESH_MASK;
 					while((y=*val++)<0)
 					{
@@ -865,8 +871,8 @@ static int III_dequantize_sample(mpg123_handle *fr, real xr[SBLIMIT][SSLIMIT],in
 
 		for(;l3 && (part2remain+num > 0);l3--)
 		{
-			const struct newhuff* h;
-			const short* val;
+			struct newhuff* h;
+			register short* val;
 			register short a;
 			/*
 				This is only a humble hack to prevent a special segfault.
@@ -984,7 +990,7 @@ static int III_dequantize_sample(mpg123_handle *fr, real xr[SBLIMIT][SSLIMIT],in
 	else
 	{
 		/* decoding with 'long' BandIndex table (block_type != 2) */
-		const unsigned char *pretab = pretab_choice[gr_info->preflag];
+		const int *pretab = gr_info->preflag ? pretab1 : pretab2;
 		int i,max = -1;
 		int cb = 0;
 		int *m = map[sfreq][2];
@@ -995,7 +1001,7 @@ static int III_dequantize_sample(mpg123_handle *fr, real xr[SBLIMIT][SSLIMIT],in
 		for(i=0;i<3;i++)
 		{
 			int lp = l[i];
-			const struct newhuff *h = ht+gr_info->table_select[i];
+			struct newhuff *h = ht+gr_info->table_select[i];
 
 			for(;lp;lp--,mc--)
 			{
@@ -1017,7 +1023,7 @@ static int III_dequantize_sample(mpg123_handle *fr, real xr[SBLIMIT][SSLIMIT],in
 					}
 				}
 				{
-					const short *val = h->table;
+					register short *val = h->table;
 					REFRESH_MASK;
 					while((y=*val++)<0)
 					{
@@ -1081,9 +1087,8 @@ static int III_dequantize_sample(mpg123_handle *fr, real xr[SBLIMIT][SSLIMIT],in
 		/* short (count1table) values */
 		for(;l3 && (part2remain+num > 0);l3--)
 		{
-			const struct newhuff *h = htc+gr_info->count1table_select;
-			const short *val = h->table;
-			register short a;
+			struct newhuff *h = htc+gr_info->count1table_select;
+			register short *val = h->table,a;
 
 			REFRESH_MASK;
 			while((a=*val++)<0)

@@ -36,11 +36,11 @@ static void *align_the_pointer(void *base, unsigned int alignment)
 static void frame_default_pars(mpg123_pars *mp)
 {
 	mp->outscale = 1.0;
-	mp->flags = 0;
 #ifdef GAPLESS
-	mp->flags |= MPG123_GAPLESS;
+	mp->flags = MPG123_GAPLESS;
+#else
+	mp->flags = 0;
 #endif
-	mp->flags |= MPG123_AUTO_RESAMPLE;
 #ifndef NO_NTOM
 	mp->force_rate = 0;
 #endif
@@ -59,11 +59,6 @@ static void frame_default_pars(mpg123_pars *mp)
 #endif
 	mp->preframes = 4; /* That's good  for layer 3 ISO compliance bitstream. */
 	mpg123_fmt_all(mp);
-	/* Default of keeping some 4K buffers at hand, should cover the "usual" use case (using 16K pipe buffers as role model). */
-#ifndef NO_FEEDER
-	mp->feedpool = 5; 
-	mp->feedbuffer = 4096;
-#endif
 }
 
 void frame_init(mpg123_handle *fr)
@@ -73,9 +68,8 @@ void frame_init(mpg123_handle *fr)
 
 void frame_init_par(mpg123_handle *fr, mpg123_pars *mp)
 {
-	fr->own_buffer = TRUE;
+	fr->own_buffer = FALSE;
 	fr->buffer.data = NULL;
-	fr->buffer.rdata = NULL;
 	fr->rawbuffs = NULL;
 	fr->rawbuffss = 0;
 	fr->rawdecwin = NULL;
@@ -116,10 +110,6 @@ void frame_init_par(mpg123_handle *fr, mpg123_pars *mp)
 	fr->err = MPG123_OK;
 	if(mp == NULL) frame_default_pars(&fr->p);
 	else memcpy(&fr->p, mp, sizeof(struct mpg123_pars_struct));
-
-#ifndef NO_FEEDER
-	bc_prepare(&fr->rdat.buffer, fr->p.feedpool, fr->p.feedbuffer);
-#endif
 
 	fr->down_sample = 0; /* Initialize to silence harmless errors when debugging. */
 	frame_fixed_reset(fr); /* Reset only the fixed data, dynamic buffers are not there yet! */
@@ -173,51 +163,34 @@ int attribute_align_arg mpg123_reset_eq(mpg123_handle *mh)
 
 int frame_outbuffer(mpg123_handle *fr)
 {
-	size_t size = fr->outblock;
-	if(!fr->own_buffer)
+	size_t size = mpg123_safe_buffer()*AUDIOBUFSIZE;
+	if(!fr->own_buffer) fr->buffer.data = NULL;
+	if(fr->buffer.data != NULL && fr->buffer.size != size)
 	{
-		if(fr->buffer.size < size)
-		{
-			fr->err = MPG123_BAD_BUFFER;
-			if(NOQUIET) error2("have external buffer of size %"SIZE_P", need %"SIZE_P, (size_p)fr->buffer.size, size);
-
-			return MPG123_ERR;
-		}
-	}
-
-	debug1("need frame buffer of %"SIZE_P, (size_p)size);
-	if(fr->buffer.rdata != NULL && fr->buffer.size != size)
-	{
-		free(fr->buffer.rdata);
-		fr->buffer.rdata = NULL;
+		free(fr->buffer.data);
+		fr->buffer.data = NULL;
 	}
 	fr->buffer.size = size;
-	fr->buffer.data = NULL;
-	/* be generous: use 16 byte alignment */
-	if(fr->buffer.rdata == NULL) fr->buffer.rdata = (unsigned char*) malloc(fr->buffer.size+15);
-	if(fr->buffer.rdata == NULL)
+	if(fr->buffer.data == NULL) fr->buffer.data = (unsigned char*) malloc(fr->buffer.size);
+	if(fr->buffer.data == NULL)
 	{
 		fr->err = MPG123_OUT_OF_MEM;
-		return MPG123_ERR;
+		return -1;
 	}
-	fr->buffer.data = aligned_pointer(fr->buffer.rdata, unsigned char*, 16);
 	fr->own_buffer = TRUE;
 	fr->buffer.fill = 0;
-	return MPG123_OK;
+	return 0;
 }
 
 int attribute_align_arg mpg123_replace_buffer(mpg123_handle *mh, unsigned char *data, size_t size)
 {
-	debug2("replace buffer with %p size %"SIZE_P, data, (size_p)size);
-	/* Will accept any size, the error comes later... */
-	if(data == NULL)
+	if(data == NULL || size < mpg123_safe_buffer())
 	{
 		mh->err = MPG123_BAD_BUFFER;
 		return MPG123_ERR;
 	}
-	if(mh->buffer.rdata != NULL) free(mh->buffer.rdata);
+	if(mh->own_buffer && mh->buffer.data != NULL) free(mh->buffer.data);
 	mh->own_buffer = FALSE;
-	mh->buffer.rdata = NULL;
 	mh->buffer.data = data;
 	mh->buffer.size = size;
 	mh->buffer.fill = 0;
@@ -500,11 +473,10 @@ static void frame_fixed_reset(mpg123_handle *fr)
 	fr->to_decode = FALSE;
 	fr->to_ignore = FALSE;
 	fr->metaflags = 0;
-	fr->outblock = 0; /* This will be set before decoding! */
+	fr->outblock = mpg123_safe_buffer();
 	fr->num = -1;
-	fr->input_offset = -1;
 	fr->playnum = -1;
-	fr->state_flags = FRAME_ACCURATE;
+	fr->accurate = TRUE;
 	fr->silent_resync = 0;
 	fr->audio_start = 0;
 	fr->clip = 0;
@@ -532,7 +504,7 @@ static void frame_fixed_reset(mpg123_handle *fr)
 	fr->fresh = 1;
 	fr->new_format = 0;
 #ifdef GAPLESS
-	frame_gapless_init(fr,-1,0,0);
+	frame_gapless_init(fr,0,0);
 	fr->lastoff = 0;
 	fr->firstoff = 0;
 #endif
@@ -572,12 +544,12 @@ static void frame_free_buffers(mpg123_handle *fr)
 
 void frame_exit(mpg123_handle *fr)
 {
-	if(fr->buffer.rdata != NULL)
+	if(fr->own_buffer && fr->buffer.data != NULL)
 	{
-		debug1("freeing buffer at %p", (void*)fr->buffer.rdata);
-		free(fr->buffer.rdata);
+		debug1("freeing buffer at %p", (void*)fr->buffer.data);
+		free(fr->buffer.data);
 	}
-	fr->buffer.rdata = NULL;
+	fr->buffer.data = NULL;
 	frame_free_buffers(fr);
 	frame_free_toc(fr);
 #ifdef FRAME_INDEX
@@ -598,9 +570,6 @@ void frame_exit(mpg123_handle *fr)
 		fr->wrapperclean(fr->wrapperdata);
 		fr->wrapperdata = NULL;
 	}
-#ifndef NO_FEEDER
-	bc_cleanup(&fr->rdat.buffer);
-#endif
 }
 
 int attribute_align_arg mpg123_info(mpg123_handle *mh, struct mpg123_frameinfo *mi)
@@ -636,17 +605,6 @@ int attribute_align_arg mpg123_info(mpg123_handle *mh, struct mpg123_frameinfo *
 	return MPG123_OK;
 }
 
-int attribute_align_arg mpg123_framedata(mpg123_handle *mh, unsigned long *header, unsigned char **bodydata, size_t *bodybytes)
-{
-	if(mh == NULL)     return MPG123_ERR;
-	if(!mh->to_decode) return MPG123_ERR;
-
-	if(header    != NULL) *header    = mh->oldhead;
-	if(bodydata  != NULL) *bodydata  = mh->bsbuf;
-	if(bodybytes != NULL) *bodybytes = mh->framesize;
-
-	return MPG123_OK;
-}
 
 /*
 	Fuzzy frame offset searching (guessing).
@@ -676,7 +634,7 @@ static off_t frame_fuzzy_find(mpg123_handle *fr, off_t want_frame, off_t* get_fr
 
 		/* Now estimate back what frame we get. */
 		*get_frame = (off_t) ((double)toc_entry/100. * fr->track_frames);
-		fr->state_flags &= ~FRAME_ACCURATE;
+		fr->accurate = FALSE;
 		fr->silent_resync = 1;
 		/* Question: Is the TOC for whole file size (with/without ID3) or the "real" audio data only?
 		   ID3v1 info could also matter. */
@@ -685,7 +643,7 @@ static off_t frame_fuzzy_find(mpg123_handle *fr, off_t want_frame, off_t* get_fr
 	else if(fr->mean_framesize > 0)
 	{	/* Just guess with mean framesize (may be exact with CBR files). */
 		/* Query filelen here or not? */
-		fr->state_flags &= ~FRAME_ACCURATE; /* Fuzzy! */
+		fr->accurate = FALSE; /* Fuzzy! */
 		fr->silent_resync = 1;
 		*get_frame = want_frame;
 		ret = (off_t) (fr->audio_start+fr->mean_framesize*want_frame);
@@ -732,7 +690,7 @@ off_t frame_index_find(mpg123_handle *fr, off_t want_frame, off_t* get_frame)
 		/* We have index position, that yields frame and byte offsets. */
 		*get_frame = fi*fr->index.step;
 		gopos = fr->index.data[fi];
-		fr->state_flags |= FRAME_ACCURATE; /* When using the frame index, we are accurate. */
+		fr->accurate = TRUE; /* When using the frame index, we are accurate. */
 	}
 	else
 	{
@@ -833,45 +791,36 @@ off_t frame_offset(mpg123_handle *fr, off_t outs)
 
 #ifdef GAPLESS
 /* input in _input_ samples */
-void frame_gapless_init(mpg123_handle *fr, off_t framecount, off_t bskip, off_t eskip)
+void frame_gapless_init(mpg123_handle *fr, off_t b, off_t e)
 {
-	debug3("frame_gaples_init: given %"OFF_P" frames, skip %"OFF_P" and %"OFF_P, (off_p)framecount, (off_p)bskip, (off_p)eskip);
-	fr->gapless_frames = framecount;
-	if(framecount > 0)
-	{
-		fr->begin_s = bskip+GAPLESS_DELAY;
-		fr->end_s = framecount*spf(fr)-eskip+GAPLESS_DELAY;
-		fr->gapless_frames = framecount;
-	}
-	else fr->begin_s = fr->end_s = 0;
+	fr->begin_s = b;
+	fr->end_s = e;
 	/* These will get proper values later, from above plus resampling info. */
 	fr->begin_os = 0;
 	fr->end_os = 0;
-	fr->fullend_os = 0;
-	debug2("frame_gapless_init: from %"OFF_P" to %"OFF_P" samples", (off_p)fr->begin_s, (off_p)fr->end_s);
+	debug2("frame_gapless_init: from %lu to %lu samples", (long unsigned)fr->begin_s, (long unsigned)fr->end_s);
 }
 
 void frame_gapless_realinit(mpg123_handle *fr)
 {
 	fr->begin_os = frame_ins2outs(fr, fr->begin_s);
 	fr->end_os   = frame_ins2outs(fr, fr->end_s);
-	fr->fullend_os = frame_ins2outs(fr, fr->gapless_frames*spf(fr));
-	debug2("frame_gapless_realinit: from %"OFF_P" to %"OFF_P" samples", (off_p)fr->begin_os, (off_p)fr->end_os);
+	debug2("frame_gapless_realinit: from %lu to %lu samples", (long unsigned)fr->begin_os, (long unsigned)fr->end_os);
 }
 
-/* At least note when there is trouble... */
+/* When we got a new sample count, update the gaplessness. */
 void frame_gapless_update(mpg123_handle *fr, off_t total_samples)
 {
-	off_t gapless_samples = fr->gapless_frames*spf(fr);
-	debug2("gapless update with new sample count %"OFF_P" as opposed to known %"OFF_P, total_samples, gapless_samples);
-	if(NOQUIET && total_samples != gapless_samples)
-	fprintf(stderr, "\nWarning: Real sample count differs from given gapless sample count. Frankenstein stream?\n");
-
-	if(gapless_samples > total_samples)
+	if(fr->end_s < 1)
 	{
-		if(NOQUIET) error2("End sample count smaller than gapless end! (%"OFF_P" < %"OFF_P"). Disabling gapless mode from now on.", (off_p)total_samples, (off_p)fr->end_s);
-		/* This invalidates the current position... but what should I do? */
-		frame_gapless_init(fr, -1, 0, 0);
+		fr->end_s = total_samples;
+		frame_gapless_realinit(fr);
+	}
+	else if(fr->end_s > total_samples)
+	{
+		if(NOQUIET) error2("end sample count smaller than gapless end! (%"OFF_P" < %"OFF_P").", (off_p)total_samples, (off_p)fr->end_s);
+		/* Humbly disabling gapless stuff on track end. */
+		fr->end_s = 0;
 		frame_gapless_realinit(fr);
 		fr->lastframe = -1;
 		fr->lastoff = 0;
@@ -900,7 +849,7 @@ void frame_set_frameseek(mpg123_handle *fr, off_t fe)
 {
 	fr->firstframe = fe;
 #ifdef GAPLESS
-	if(fr->p.flags & MPG123_GAPLESS && fr->gapless_frames > 0)
+	if(fr->p.flags & MPG123_GAPLESS)
 	{
 		/* Take care of the beginning... */
 		off_t beg_f = frame_offset(fr, fr->begin_os);
@@ -915,7 +864,7 @@ void frame_set_frameseek(mpg123_handle *fr, off_t fe)
 		{
 			fr->lastframe  = frame_offset(fr,fr->end_os);
 			fr->lastoff    = fr->end_os - frame_outs(fr, fr->lastframe);
-		} else {fr->lastframe = -1; fr->lastoff = 0; }
+		} else fr->lastoff = 0;
 	} else { fr->firstoff = fr->lastoff = 0; fr->lastframe = -1; }
 #endif
 	fr->ignoreframe = ignoreframe(fr);
@@ -1038,9 +987,3 @@ int attribute_align_arg mpg123_getvolume(mpg123_handle *mh, double *base, double
 	return MPG123_OK;
 }
 
-off_t attribute_align_arg mpg123_framepos(mpg123_handle *mh)
-{
-	if(mh == NULL) return MPG123_ERR;
-
-	return mh->input_offset;
-}

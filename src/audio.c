@@ -43,16 +43,16 @@ static int builtin_close(struct audio_output_struct *ao)
 	switch(param.outmode)
 	{
 		case DECODE_WAV:
-		return wav_close();
+		wav_close();
 		break;
 		case DECODE_AU:
-		return au_close();
+		au_close();
 		break;
 		case DECODE_CDR:
-		return cdr_close();
+		cdr_close();
 		break;
 	}
-	return -1;
+	return 0;
 }
 static int  builtin_nothingint(struct audio_output_struct *ao){ return 0; }
 static void builtin_nothing(struct audio_output_struct *ao){}
@@ -474,7 +474,6 @@ int init_output(audio_output_t **ao)
 		/* No +1024 for NtoM rounding problems anymore! */
 		xfermem_init (&buffermem, bufferbytes ,0,0);
 		sigemptyset (&newsigset);
-		/* ThOr: I'm not quite sure why we need to block that signal here. */
 		sigaddset (&newsigset, SIGUSR1);
 		sigprocmask (SIG_BLOCK, &newsigset, &oldsigset);
 #if !defined(WIN32) && !defined(GENERIC)
@@ -514,8 +513,6 @@ int init_output(audio_output_t **ao)
 			default: /* parent */
 			xfermem_init_writer (buffermem);
 		}
-		/* ThOr: I want that USR1 signal back for control. */
-		sigprocmask(SIG_UNBLOCK, &newsigset, NULL);
 	}
 #else
 	if(param.usebuffer)
