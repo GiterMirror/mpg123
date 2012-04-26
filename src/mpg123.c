@@ -128,7 +128,6 @@ char *equalfile = NULL;
 struct httpdata htd;
 int fresh = TRUE;
 int have_output = FALSE; /* If we are past the output init step. */
-FILE* aux_out = NULL; /* Output for interesting information, normally on stdout to be parseable. */
 
 int buffer_fd[2];
 int buffer_pid;
@@ -201,7 +200,7 @@ void safe_exit(int code)
 #ifdef WANT_WIN32_UNICODE
 	win32_cmdline_free(argc, argv); /* This handles the premature argv == NULL, too. */
 #endif
-#if defined (WANT_WIN32_SOCKETS)
+#if defined (WANT_WIN32_UNICODE)
 	win32_net_deinit();
 #endif
 	/* It's ugly... but let's just fix this still-reachable memory chunk of static char*. */
@@ -323,7 +322,6 @@ static void set_out_stdout(char *arg)
 {
 	param.outmode=DECODE_FILE;
 	param.remote_err=TRUE;
-	aux_out = stderr;
 	OutputDescriptor=STDOUT_FILENO;
 	#ifdef WIN32
 	_setmode(STDOUT_FILENO, _O_BINARY);
@@ -334,7 +332,6 @@ static void set_out_stdout1(char *arg)
 {
 	param.outmode=DECODE_AUDIOFILE;
 	param.remote_err=TRUE;
-	aux_out = stderr;
 	OutputDescriptor=STDOUT_FILENO;
 	#ifdef WIN32
 	_setmode(STDOUT_FILENO, _O_BINARY);
@@ -470,7 +467,6 @@ topt opts[] = {
 	{0 , "longhelp" ,        0,  want_long_usage, 0,      0 },
 	{0 , "version" ,         0,  give_version, 0,         0 },
 	{'l', "listentry",       GLO_ARG | GLO_LONG, 0, &param.listentry, 0 },
-	{0, "continue", GLO_INT, set_appflag, &appflag, MPG123APP_CONTINUE },
 	{0, "rva-mix",         GLO_INT,  0, &param.rva, 1 },
 	{0, "rva-radio",         GLO_INT,  0, &param.rva, 1 },
 	{0, "rva-album",         GLO_INT,  0, &param.rva, 2 },
@@ -784,7 +780,6 @@ int skip_or_die(struct timeval *start_time)
 int main(int sys_argc, char ** sys_argv)
 {
 	int result;
-	char end_of_files = FALSE;
 	long parr;
 	char *fname;
 	int libpar = 0;
@@ -792,7 +787,7 @@ int main(int sys_argc, char ** sys_argv)
 #if !defined(WIN32) && !defined(GENERIC)
 	struct timeval start_time;
 #endif
-	aux_out = stdout; /* Need to initialize here because stdout is not a constant?! */
+
 #if defined (WANT_WIN32_UNICODE)
 	if(win32_cmdline_utf8(&argc, &argv) != 0)
 	{
@@ -1032,12 +1027,9 @@ int main(int sys_argc, char ** sys_argv)
 		if(param.term_ctrl)
 			term_init();
 #endif
-	if(APPFLAG(MPG123APP_CONTINUE)) frames_left = param.frame_number;
-
 	while ((fname = get_next_file()))
 	{
 		char *dirname, *filename;
-		int newdir;
 		/* skip_tracks includes the previous one. */
 		if(skip_tracks) --skip_tracks;
 		if(skip_tracks)
@@ -1057,8 +1049,7 @@ int main(int sys_argc, char ** sys_argv)
 #endif
 			output_unpause(ao);
 		}
-		if(!APPFLAG(MPG123APP_CONTINUE)) frames_left = param.frame_number;
-
+		frames_left = param.frame_number;
 		debug1("Going to play %s", strcmp(fname, "-") ? fname : "standard input");
 
 		if(intflag || !open_track(fname))
@@ -1088,8 +1079,6 @@ int main(int sys_argc, char ** sys_argv)
 		if(param.start_frame > 0)
 		framenum = mpg123_seek_frame(mh, param.start_frame, SEEK_SET);
 
-		if(APPFLAG(MPG123APP_CONTINUE)) param.start_frame = 0;
-
 		if(framenum < 0)
 		{
 			error1("Initial seek failed: %s", mpg123_strerror(mh));
@@ -1103,12 +1092,11 @@ int main(int sys_argc, char ** sys_argv)
 			continue;
 		}
 
-		/* Prinout and xterm title need this, possibly independently. */
-		newdir = split_dir_file(fname ? fname : "standard input", &dirname, &filename);
-
 		if (!param.quiet)
 		{
-			if(newdir) fprintf(stderr, "Directory: %s\n", dirname);
+			if (split_dir_file(fname ? fname : "standard input",
+				&dirname, &filename))
+				fprintf(stderr, "Directory: %s\n", dirname);
 
 #ifdef HAVE_TERMIOS
 		/* Reminder about terminal usage. */
@@ -1119,7 +1107,7 @@ int main(int sys_argc, char ** sys_argv)
 			fprintf(stderr, "Playing MPEG stream %lu of %lu: %s ...\n", (unsigned long)pl.pos, (unsigned long)pl.fill, filename);
 			if(htd.icy_name.fill) fprintf(stderr, "ICY-NAME: %s\n", htd.icy_name.p);
 			if(htd.icy_url.fill)  fprintf(stderr, "ICY-URL: %s\n",  htd.icy_url.p);
-		}
+
 #if !defined(GENERIC)
 {
 	const char *term_type;
@@ -1128,11 +1116,11 @@ int main(int sys_argc, char ** sys_argv)
 	    (!strncmp(term_type,"xterm",5) || !strncmp(term_type,"rxvt",4)))
 	{
 		fprintf(stderr, "\033]0;%s\007", filename);
-		fflush(stderr); /* Paranoia: will the buffer buffer the escapes? */
 	}
 }
 #endif
 
+		}
 /* Rethink that SIGINT logic... */
 #if !defined(WIN32) && !defined(GENERIC)
 #ifdef HAVE_TERMIOS
@@ -1147,12 +1135,7 @@ int main(int sys_argc, char ** sys_argv)
 			if(param.frame_number > -1)
 			{
 				debug1("frames left: %li", (long) frames_left);
-				if(!frames_left)
-				{
-					if(APPFLAG(MPG123APP_CONTINUE)) end_of_files = TRUE;
-
-					break;
-				}
+				if(!frames_left) break;
 			}
 			if(!play_frame()) break;
 			if(!param.quiet)
@@ -1208,23 +1191,14 @@ int main(int sys_argc, char ** sys_argv)
 #ifndef NOXFERMEM
         if(!param.smooth && param.usebuffer) buffer_resync();
 #endif
-	}
-
-		if(end_of_files) break;
-	} /* end of loop over input files */
-
+      }
+    } /* end of loop over input files */
 	/* Ensure we played everything. */
 	if(param.smooth && param.usebuffer)
 	{
 		buffer_drain();
 		buffer_resync();
 	}
-
-	if(APPFLAG(MPG123APP_CONTINUE))
-	{
-		fprintf(aux_out, "\n[CONTINUE] track %"SIZE_P" frame %"OFF_P"\n", (size_p)pl.pos, (off_p)framenum);
-	}
-
 	/* Free up memory used by playlist */    
 	if(!param.remote) free_playlist();
 
@@ -1310,7 +1284,6 @@ static void long_usage(int err)
 	fprintf(o,"        --ignore-mime      ignore HTTP MIME types (content-type)\n");
 	fprintf(o," -@ <f> --list <f>         play songs in playlist <f> (plain list, m3u, pls (shoutcast))\n");
 	fprintf(o," -l <n> --listentry <n>    play nth title in playlist; show whole playlist for n < 0\n");
-	fprintf(o,"        --continue         playlist continuation mode (see man page)\n");
 	fprintf(o,"        --loop <n>         loop track(s) <n> times, < 0 means infinite loop (not with --random!)\n");
 	fprintf(o,"        --keep-open        (--remote mode only) keep loaded file open after reaching end\n");
 	fprintf(o,"        --timeout <n>      Timeout in seconds before declaring a stream dead (if <= 0, wait forever)\n");
