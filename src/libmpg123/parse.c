@@ -601,7 +601,6 @@ init_resync:
 	fr->to_decode = fr->to_ignore = TRUE;
 	if(fr->error_protection) fr->crc = getbits(fr, 16); /* skip crc */
 
-	fr->oldhead = newhead;
 
 	return 1;
 read_frame_bad:
@@ -717,6 +716,8 @@ static int decode_header(mpg123_handle *fr,unsigned long newhead)
 
 	fr->stereo = (fr->mode == MPG_MD_MONO) ? 1 : 2;
 
+	fr->oldhead = newhead;
+	
 	/* we can't use tabsel_123 for freeformat, so trying to guess framesize... */
 	if(fr->freeformat)
 	{
