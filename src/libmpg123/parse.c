@@ -61,7 +61,7 @@ static const int tabsel_123[2][3][16] =
 
 static const long freqs[9] = { 44100, 48000, 32000, 22050, 24000, 16000 , 11025 , 12000 , 8000 };
 
-static int decode_header(mpg123_handle *fr,unsigned long newhead, int *freeformat_count);
+static int decode_header(mpg123_handle *fr,unsigned long newhead);
 static int skip_junk(mpg123_handle *fr, unsigned long *newheadp, long *headcount);
 static int do_readahead(mpg123_handle *fr, unsigned long newhead);
 static int wetwork(mpg123_handle *fr, unsigned long *newheadp);
@@ -436,7 +436,6 @@ static int halfspeed_do(mpg123_handle *fr)
 if(ret < 0){ debug1("%s", ret == MPG123_NEED_MORE ? "need more" : "read error"); goto read_frame_bad; } \
 else if(ret == PARSE_AGAIN) goto read_again; \
 else if(ret == PARSE_RESYNC) goto init_resync; \
-else if(ret == PARSE_END) goto read_frame_bad; \
 }
 
 /*
@@ -446,7 +445,6 @@ else if(ret == PARSE_END) goto read_frame_bad; \
 int read_frame(mpg123_handle *fr)
 {
 	/* TODO: rework this thing */
-	int freeformat_count = 0;
 	unsigned long newhead;
 	off_t framepos;
 	int ret;
@@ -497,7 +495,7 @@ init_resync:
 #endif
 
 	ret = head_check(newhead);
-	if(ret) ret = decode_header(fr, newhead, &freeformat_count);
+	if(ret) ret = decode_header(fr, newhead);
 
 	JUMP_CONCLUSION(ret); /* That only continues for ret == 0 or 1 */
 	if(ret == 0)
@@ -642,7 +640,8 @@ static int guess_freeformat_framesize(mpg123_handle *fr)
 	return ret;
 
 	/* We are already 4 bytes into it */
-	for(i=4;i<MAXFRAMESIZE+4;i++)
+	/* Fix that limit to be absolute for the first header search! */
+	for(i=4;i<65536;i++)
 	{
 		if((ret=fr->rd->head_shift(fr,&head))<=0) return ret;
 
@@ -668,7 +667,7 @@ static int guess_freeformat_framesize(mpg123_handle *fr)
  * <0: some error
  * You are required to do a head_check() before calling!
  */
-static int decode_header(mpg123_handle *fr,unsigned long newhead, int *freeformat_count)
+static int decode_header(mpg123_handle *fr,unsigned long newhead)
 {
 #ifdef DEBUG /* Do not waste cycles checking the header twice all the time. */
 	if(!head_check(newhead))
@@ -725,12 +724,6 @@ static int decode_header(mpg123_handle *fr,unsigned long newhead, int *freeforma
 		if(fr->freeformat_framesize < 0)
 		{
 			int ret;
-			*freeformat_count += 1;
-			if(*freeformat_count > 5)
-			{
-				if(VERBOSE3) error("You fooled me too often. Refusing to guess free format frame size _again_.");
-				return 0;
-			}
 			ret = guess_freeformat_framesize(fr);
 			if(ret>0)
 			{
@@ -1022,7 +1015,6 @@ static int handle_id3v2(mpg123_handle *fr, unsigned long newhead)
 static int skip_junk(mpg123_handle *fr, unsigned long *newheadp, long *headcount)
 {
 	int ret;
-	int freeformat_count = 0;
 	long limit = 65536;
 	unsigned long newhead = *newheadp;
 	/* check for id3v2; first three bytes (of 4) are "ID3" */
@@ -1072,7 +1064,7 @@ static int skip_junk(mpg123_handle *fr, unsigned long *newheadp, long *headcount
 
 		if((ret=fr->rd->head_shift(fr,&newhead))<=0) return ret;
 
-		if(head_check(newhead) && (ret=decode_header(fr, newhead, &freeformat_count))) break;
+		if(head_check(newhead) && (ret=decode_header(fr, newhead))) break;
 	} while(1);
 	if(ret<0) return ret;
 
