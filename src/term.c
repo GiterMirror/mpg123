@@ -427,7 +427,6 @@ static void term_handle_key(mpg123_handle *fr, audio_output_t *ao, char val)
 
 			fprintf(stderr, "\t%s\n", term_help[i].desc);
 		}
-		fprintf(stderr, "\nAlso, the number row (starting at 1, ending at 0) gives you jump points into the current track at 10%% intervals.\n");
 		fprintf(stderr, "\n");
 	}
 	break;
@@ -453,28 +452,6 @@ static void term_handle_key(mpg123_handle *fr, audio_output_t *ao, char val)
 				else fprintf(stderr, "Active decoder: %s\n", curdec);
 			}
 		}
-	break;
-	case '0':
-	case '1':
-	case '2':
-	case '3':
-	case '4':
-	case '5':
-	case '6':
-	case '7':
-	case '8':
-	case '9':
-	{
-		off_t len;
-		int num;
-		num = val == '0' ? 10 : val - '0';
-		--num; /* from 0 to 9 */
-
-		seekmode();
-		len = mpg123_length(fr);
-		if(len > 0) mpg123_seek(fr, (off_t)( (num/10.)*len ), SEEK_SET);
-
-	}
 	break;
 	default:
 		;

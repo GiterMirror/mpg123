@@ -53,6 +53,7 @@ struct auhead {
 
 
 static FILE *wavfp;
+static int header_written = 0; /* prevent writing multiple headers to stdout */
 static long datalen = 0;
 static int flipendian=0;
 int bytes_per_sample = -1;
@@ -130,9 +131,20 @@ static int open_file(char *filename)
      wavfp = fopen(filename,"wb");
 #endif
      if(!wavfp)
-        return -1;
-     else
-        return 0;
+       return -1;
+		else
+		{
+			/* Test if we actually can write at least a byte, only chance to catch a totally full disk early. */
+			char a = 'a';
+			if(fwrite(&a, 1, 1, wavfp) == 1 && !fflush(wavfp) && !fseek(wavfp, 0, SEEK_SET))
+			return 0;
+			else
+			{
+				error1("cannot even write a single byte: %s", strerror(errno));
+				fclose(wavfp);
+				return -1;
+			}
+		}
    }
 }
 
@@ -155,6 +167,12 @@ static int close_file()
 /* Wrapper over header writing; ensure that stdout doesn't get multiple headers. */
 static int write_header(const void*ptr, size_t size)
 {
+	if(wavfp == stdout)
+	{
+		if(header_written) return 0;
+
+		header_written = 1;
+	}
 	if(fwrite(ptr, size, 1, wavfp) != 1 || fflush(wavfp))
 	{
 		error1("cannot write header: %s", strerror(errno));
