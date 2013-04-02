@@ -50,7 +50,6 @@ libmpg123_la_SOURCES = \
 	synths.h \
 	equalizer.c \
 	huffman.h \
-	newhuffman.h \
 	icy.h \
 	icy2utf8.h \
 	id3.h \

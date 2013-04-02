@@ -8,7 +8,7 @@ dnl Require autoconf version >= 2.57
 AC_PREREQ(2.57)
 
 dnl ############# Initialisation
-AC_INIT([mpg123], [1.16.0], [mpg123-devel@lists.sourceforge.net])
+AC_INIT([mpg123], [1.15.2], [mpg123-devel@lists.sourceforge.net])
 dnl Increment API_VERSION when the API gets changes (new functions).
 API_VERSION=37
 LIB_PATCHLEVEL=1
@@ -384,20 +384,6 @@ if test "x$messages" = "xdisabled"; then
   AC_DEFINE(NO_WARNING, 1, [ Define to disable warning messages. ])
   AC_DEFINE(NO_ERRORMSG,   1, [ Define to disable error messages. ])
   AC_DEFINE(NO_ERETURN, 1, [ Define to disable error messages in combination with a return value (the return is left intact). ])
-fi
-
-newhuff=enabled
-AC_ARG_ENABLE(new-huffman,
-[  --enable-new-huffman=[yes/no] use new huffman decoding scheme by Taihei (faster on modern CPUs at least, so on by default) ],
-[
-  if test "x$enableval" = xno; then
-    newhuff=disabled
-  fi
-]
-, [])
-
-if test "x$newhuff" = "xenabled"; then
-  AC_DEFINE(USE_NEW_HUFFTABLE, 1, [ Define for new Huffman decoding scheme. ])
 fi
 
 integers=fast
@@ -2247,7 +2233,6 @@ echo -n "
   16 bit integer .......... $int16
   32/24 bit integer ....... $int32
   real (32 bit float) ..... $real
-  new Huffman scheme ...... $newhuff
 
 Note: Disabling core features is not commonly done and some combinations might not build/work. If you encounter such a case, help yourself (and provide a patch) or just poke the maintainers.
 "
