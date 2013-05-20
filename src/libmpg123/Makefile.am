@@ -6,7 +6,7 @@
 
 #AM_CFLAGS = @AUDIO_CFLAGS@
 #AM_LDFLAGS = 
-AM_CPPFLAGS = -I$(top_srcdir)/src -I$(top_srcdir)/src/libmpg123
+INCLUDES = -I$(top_srcdir)/src -I$(top_srcdir)/src/libmpg123
 
 EXTRA_DIST = mpg123.h.in
 
@@ -50,7 +50,6 @@ libmpg123_la_SOURCES = \
 	synths.h \
 	equalizer.c \
 	huffman.h \
-	newhuffman.h \
 	icy.h \
 	icy2utf8.h \
 	id3.h \
